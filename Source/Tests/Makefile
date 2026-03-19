@@ -21,6 +21,7 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/MorphAnalyzerTests.cpp \
             ../NeiraTests/Private/SyntaxParserTests.cpp \
             ../NeiraTests/Private/BeliefEngineTests.cpp \
+            ../NeiraTests/Private/LexiconPackageRegressionTests.cpp \
             ../NeiraTests/Private/ThresholdRegressionGateTests.cpp \
             ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
             ../NeiraTests/Private/DoDIntegrationTests.cpp \
