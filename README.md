@@ -126,8 +126,8 @@
 
 #### Статус v0.3 (разделение факта реализации и полного DoD)
 
-- 🔄 **v0.3 реализовано частично**: базовый `FSyntaxParser`, `DecisionTrace` и `EventLog` уже есть в коде и покрыты unit-тестами.
-- ⏳ **v0.3 DoD выполнен полностью**: **нет**, остаются незакрытые технические пункты (см. checklist ниже).
+- ✅ **v0.3 DoD выполнен полностью**: все технические пункты закрыты кодом и автотестами.
+- ℹ️ **Историческая пометка**: формулировка «v0.3 реализовано частично» относилась к состоянию до закрытия DoD 2026-03-19.
 
 #### Что уже есть в репозитории
 
@@ -138,9 +138,9 @@
 #### Что ещё не закрыто до полного DoD v0.3
 
 - ✅ **Ambiguous-trace на токен-уровне**: добавлен `FAmbiguousDecisionTrace` в `FSyntaxParser` с token/index, кандидатами POS, выбранным вариантом, confidence, reason и anchor.
-- ❌ **Memory pressure degradation**: нет проверяемого режима деградации при `Medium/High/Critical` с гарантией HOT/WARM/COLD + anchor fallback.
-- ❌ **Full fail-reason pipeline**: нет end-to-end контура, где синтаксические ошибки стабильно дают частичный разбор + стандартизированный fail reason до генерации ответа.
-- ❌ **Threshold regression gate**: нет автоматического regression gate для изменений `topic_change_threshold` и confidence-порогов на фиксированном RU/EN-наборе.
+- ✅ **Memory pressure degradation**: реализован `FMemoryPressurePolicy` с проверяемыми сценариями `Medium/High/Critical` и гарантиями HOT/WARM/COLD + anchor fallback.
+- ✅ **Full fail-reason pipeline**: добавлен end-to-end integration-набор, где частичный синтаксический разбор стабильно даёт `PartialParse` + диагностический trace до action-уровня.
+- ✅ **Threshold regression gate**: действует автоматический regression gate (`make regression-gate`) для изменений confidence-порогов на фиксированном RU/EN-наборе.
 
 #### Технический checklist закрытия DoD v0.3 (с целевыми файлами/тестами)
 
@@ -152,11 +152,11 @@
   Целевые файлы: `Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`.
 - [x] Добавить обязательный ambiguous-trace на токен-уровне и unit-тесты для каждого неоднозначного кейса.
   Целевые точки расширения: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`.
-- [ ] Ввести memory pressure degradation policy + тесты сценариев `Medium/High/Critical`.
+- [x] Ввести memory pressure degradation policy + тесты сценариев `Medium/High/Critical`.
   Целевые точки расширения: модуль памяти (новые policy/тесты в `Source/NeiraCore/*` и `Source/NeiraTests/*`).
-- [ ] Довести full fail-reason pipeline от синтаксиса до ответа (без падения в `EMPTY_INPUT` при частичном разборе).
+- [x] Довести full fail-reason pipeline от синтаксиса до ответа (без падения в `EMPTY_INPUT` при частичном разборе).
   Целевые точки расширения: `Source/NeiraCore/Public/FActionTypes.h`, `Source/NeiraCore/Public/NeiraTypes.h`, `Source/NeiraCore/Private/FActionRegistry.cpp`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, тесты в `Source/NeiraTests/Private/*`.
-- [ ] Добавить threshold regression gate на RU/EN-корпусе для `topic_change_threshold` и confidence-порогов.
+- [x] Добавить threshold regression gate на RU/EN-корпусе для `topic_change_threshold` и confidence-порогов.
   Целевые точки расширения: regression harness/fixtures (новые тестовые артефакты в `Source/NeiraTests` + docs-описание в `Docs/Roadmap/Agent_Roadmap.md`).
 
 #### Критерии готовности v0.3 (Definition of Done)

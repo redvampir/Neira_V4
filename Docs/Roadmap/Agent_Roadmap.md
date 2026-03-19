@@ -24,8 +24,8 @@
 | Owner-решения для снятия блокеров | ✅ Done (фиксация) | Зафиксированы решения по PII, source-of-truth (через командный ADR-процесс), SLA по железу, рамкам online-learning, RU+EN-заделу. | Перевести решения в политики, схемы и тестируемые правила. |
 | **Реализация v0.1 pipeline** | ✅ Done | FPhraseClassifier, FIntentExtractor, FActionRegistry, FHypothesisStore (.cpp). 35 тестов в NeiraTests. | Запустить тесты в UE Automation Tool; подключить Build.cs. |
 | **Реализация v0.2 морфология** | ✅ Done | FMorphAnalyzer: словарь ~130 слов + суффиксные правила (глаголы/существительные/прилагательные). FHypothesisStore v0.2: ConfirmCount, MinConfirmCount=2. 17 тестов. | Расширить словарь до 1000+ слов; подключить к FIntentExtractor. |
-| **v0.3 реализовано частично** | 🔄 In Progress | В коде есть базовый `FSyntaxParser`, `DecisionTrace`, `EventLog`; есть unit-тесты на синтаксис/trace/event-log. | Закрыть оставшиеся технические пункты DoD: ambiguous-trace, memory pressure degradation, full fail-reason pipeline. |
-| **v0.3 DoD выполнен полностью** | 🔄 In Progress | DoD формализован, но закрыт не полностью: часть критериев пока только в требованиях. | Перевести все пункты DoD в код + автопроверки и перевести статус в ✅ Done. |
+| **v0.3 реализовано частично** | ✅ Done (historical) | Исторический этап до закрытия DoD: базовый `FSyntaxParser`, `DecisionTrace`, `EventLog` и unit-тесты были готовы. | Пометка оставлена как историческая, активный статус — строка DoD ниже. |
+| **v0.3 DoD выполнен полностью** | ✅ Done | Закрыты все 7/7 техпунктов DoD, включая full fail-reason pipeline, memory degradation и threshold regression gate. Добавлен интеграционный набор `Neira.Integration.DoDv03.*`. | Поддерживать gate зелёным при изменениях порогов/intent-логики. |
 | Формальные контракты модулей (schema/API/errors) | 🔄 In Progress | Заголовки модулей содержат контракты в комментариях. Формальных JSON Schema ещё нет. | JSON Schema v1, versioning policy, error catalog, negative tests для каждого шага pipeline. |
 | Память и транзакционность | 🔄 In Progress | FHypothesisStore: инварианты переходов состояний, счётчик подтверждений. Полная транзакционная модель ещё не описана. | Формальная модель write-path, rollback/replay сценарии, тесты на отсутствие partial state. |
 | Explainability и аудит | 🔄 In Progress | Зафиксирована необходимость trace-id, decision trace и forensic dump. | Единый trace-формат + экспортируемый forensic-режим + регрессионные проверки разбора причин. |
@@ -62,14 +62,14 @@
 
 ## 4.1) Технический checklist закрытия DoD v0.3
 
-Статус на **2026-03-19**: 6/7 пунктов закрыты, 1/7 открыт.
+Статус на **2026-03-19**: 7/7 пунктов закрыты.
 
 - [x] Базовый `FSyntaxParser` + unit-тесты (`Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
 - [x] `DecisionTrace` в intent-пайплайне + тесты (`Source/NeiraCore/Public/FIntentExtractor.h`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/IntentExtractorTests.cpp`).
 - [x] `EventLog` переходов гипотез + тесты (`Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`).
 - [x] Ambiguous-trace на уровне каждого `AmbiguousToken` (реализован `FAmbiguousDecisionTrace` + deterministic tie-break + unit-тесты; целевые точки: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
 - [x] Memory pressure degradation (`Medium/High/Critical`) с тестируемыми гарантиями HOT/WARM/COLD+anchor (реализован `FMemoryPressurePolicy` с API статуса/причины деградации и unit-тестами переходов/anchor-recovery; целевые точки: `Source/NeiraCore/Public/FMemoryPressurePolicy.h`, `Source/NeiraCore/Private/FMemoryPressurePolicy.cpp`, `Source/NeiraTests/Private/MemoryPressurePolicyTests.cpp`).
-- [ ] Full fail-reason pipeline от синтаксиса до ответа (целевые точки: `Source/NeiraCore/Public/FActionTypes.h`, `Source/NeiraCore/Public/NeiraTypes.h`, `Source/NeiraCore/Private/FActionRegistry.cpp`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/*`).
+- [x] Full fail-reason pipeline от синтаксиса до ответа (добавлены интеграционные тесты `Source/NeiraTests/Private/DoDIntegrationTests.cpp`: end-to-end на PartialParse/DecisionTrace/threshold gate + связка с memory degradation).
 - [x] Threshold regression gate по `topic_change_threshold` и confidence thresholds на фиксированном RU/EN-наборе (добавлены fixtures `Source/NeiraTests/Fixtures/RegressionIntentFrameFixtures.h`, source-of-truth конфиг `Source/NeiraTests/Fixtures/RegressionThresholds.cfg`, gate-тест `Source/NeiraTests/Private/ThresholdRegressionGateTests.cpp`, цель запуска `make regression-gate`).
 
 
@@ -106,8 +106,8 @@
 - ✅ Зафиксирован список критических архитектурных пробелов с приоритетом закрытия.
 - ✅ Зафиксированы ключевые owner-решения, снимающие часть стратегических блокеров.
 - ✅ Добавлен минимальный контур координации агентов: playbook, handoff log, ADR-реестр, knowledge index.
-- 🔄 v0.3 зафиксирована как частично реализованная: база синтаксиса/trace/event-log есть, но полный DoD ещё не закрыт технически.
-- 🔄 Не хватает формальных контрактов и full fail-reason pipeline; threshold regression gate вынесен в обязательную проверку `make regression-gate`.
+- ✅ v0.3 DoD закрыт полностью: синтаксис/trace/event-log/ambiguous-trace/memory degradation/fail-reason pipeline/threshold gate покрыты кодом и тестами.
+- ℹ️ Формулировка «частично реализовано» сохранена только как исторический статус переходного этапа.
 
 ---
 
