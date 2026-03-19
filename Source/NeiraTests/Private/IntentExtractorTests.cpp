@@ -360,4 +360,43 @@ bool FIntentExtractor_SyntaxError_PartialParse::RunTest(const FString& Parameter
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Доменные пакеты regression-v0.4: action / diagnostics / memory
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_DomainPackages_TargetIntents,
+    "Neira.IntentExtractor.DomainPackages.TargetIntents",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_DomainPackages_TargetIntents::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+
+    // action_commands: команда действия не должна ошибочно попадать в semantic-intent.
+    {
+        FIntentResult Result = Extractor.Extract(TEXT("проверь окно"), EPhraseType::Command);
+        TestEqual(TEXT("action_commands → Unknown"), Result.IntentID, EIntentID::Unknown);
+    }
+
+    // text_diagnostics: сценарий диагностики текста.
+    {
+        FIntentResult Result = Extractor.Extract(
+            TEXT("найди значение слова текста"), EPhraseType::Command);
+        TestEqual(TEXT("text_diagnostics → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
+        TestEqual(TEXT("text_diagnostics: EntityTarget='текста'"),
+            Result.EntityTarget, FString(TEXT("текста")));
+    }
+
+    // memory_knowledge: извлечение термина после meta-word.
+    {
+        FIntentResult Result = Extractor.Extract(
+            TEXT("найди определение термина память"), EPhraseType::Command);
+        TestEqual(TEXT("memory_knowledge → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
+        TestEqual(TEXT("memory_knowledge: EntityTarget='память'"),
+            Result.EntityTarget, FString(TEXT("память")));
+    }
+
+    return true;
+}
+
 #undef NEIRA_TEST_FLAGS
