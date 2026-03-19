@@ -99,6 +99,9 @@ bool FVoiceSmoke_AsrEmptyPromptRepeat::RunTest(const FString& Parameters)
     const FVoiceTurnResult Result = Orchestrator.RunTurn(Request);
     TestTrue(TEXT("При пустом ASR нужно просить повтор"), Result.bShouldPromptRepeat);
     TestTrue(TEXT("При пустом ASR нужно переключиться на текст"), Result.bSwitchedToText);
+    TestEqual(TEXT("Должен быть код диагностики empty transcript"),
+              Result.DiagnosticCode,
+              FString(TEXT("FVoiceSessionOrchestrator:ASR_EMPTY_TRANSCRIPT")));
     TestTrue(TEXT("Ответ должен содержать просьбу повторить"), Result.TextResponse.Contains(TEXT("Повторите"), false));
 
     return true;
@@ -135,8 +138,102 @@ bool FVoiceSmoke_TtsUnavailableFallbackToText::RunTest(const FString& Parameters
               Result.TextResponse,
               FString(TEXT("text::что такое память")));
     TestFalse(TEXT("TTS output не должен быть активен"), Result.bUsedVoiceOutput);
+    TestEqual(TEXT("Должен быть код диагностики TTS"),
+              Result.DiagnosticCode,
+              FString(TEXT("FVoiceSessionOrchestrator:TTS_FAILED")));
     TestTrue(TEXT("Диагностика должна содержать причину TTS"), Result.DiagnosticNote.Contains(TEXT("tts unavailable"), false));
 
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceSmoke_SilenceFallbackWithDiagnosticCode,
+    "Neira.Voice.Smoke.SilenceFallbackWithDiagnosticCode",
+    NEIRA_TEST_FLAGS)
+bool FVoiceSmoke_SilenceFallbackWithDiagnosticCode::RunTest(const FString& Parameters)
+{
+    FVoiceFeatureFlags Flags;
+    Flags.bVoiceEnabled = true;
+
+    FVoiceSessionOrchestrator Orchestrator(
+        Flags,
+        [](const FString& Input) -> FString { return FString(TEXT("text::")) + Input; },
+        nullptr,
+        nullptr);
+
+    FVoiceTurnRequest Request;
+    Request.AudioInput = TEXT("   ");
+    Request.TextInput = TEXT("");
+
+    const FVoiceTurnResult Result = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("На тишине должен быть код VAD_SILENCE"),
+              Result.DiagnosticCode,
+              FString(TEXT("FVoiceSessionOrchestrator:VAD_SILENCE")));
+    TestTrue(TEXT("На тишине нужен prompt repeat"), Result.bShouldPromptRepeat);
+    TestTrue(TEXT("На тишине нужен fallback в текст"), Result.bSwitchedToText);
+    TestTrue(TEXT("Ответ должен быть текстовым fallback"), Result.TextResponse.Contains(TEXT("Тишина"), false));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceSmoke_InterruptedAudioFallbackWithDiagnosticCode,
+    "Neira.Voice.Smoke.InterruptedAudioFallbackWithDiagnosticCode",
+    NEIRA_TEST_FLAGS)
+bool FVoiceSmoke_InterruptedAudioFallbackWithDiagnosticCode::RunTest(const FString& Parameters)
+{
+    FVoiceFeatureFlags Flags;
+    Flags.bVoiceEnabled = true;
+
+    FVoiceSessionOrchestrator Orchestrator(
+        Flags,
+        [](const FString& Input) -> FString { return FString(TEXT("text::")) + Input; },
+        nullptr,
+        nullptr);
+
+    FVoiceTurnRequest Request;
+    Request.AudioInput = TEXT("ab");
+    Request.TextInput = TEXT("");
+
+    const FVoiceTurnResult Result = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("На обрыве аудио должен быть код VAD_AUDIO_INTERRUPTED"),
+              Result.DiagnosticCode,
+              FString(TEXT("FVoiceSessionOrchestrator:VAD_AUDIO_INTERRUPTED")));
+    TestTrue(TEXT("На обрыве нужно просить повтор"), Result.bShouldPromptRepeat);
+    TestTrue(TEXT("На обрыве нужен fallback в текст"), Result.bSwitchedToText);
+    TestTrue(TEXT("Ответ должен содержать подсказку про обрыв"), Result.TextResponse.Contains(TEXT("Обрыв аудио"), false));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceSmoke_AsrTimeoutFallbackWithDiagnosticCode,
+    "Neira.Voice.Smoke.AsrTimeoutFallbackWithDiagnosticCode",
+    NEIRA_TEST_FLAGS)
+bool FVoiceSmoke_AsrTimeoutFallbackWithDiagnosticCode::RunTest(const FString& Parameters)
+{
+    FMockSpeechToText Asr;
+    Asr.NextResult.Status = EAsrStatus::Timeout;
+    Asr.NextResult.DiagnosticNote = TEXT("asr timed out");
+
+    FVoiceFeatureFlags Flags;
+    Flags.bVoiceEnabled = true;
+
+    FVoiceSessionOrchestrator Orchestrator(
+        Flags,
+        [](const FString& Input) -> FString { return FString(TEXT("text::")) + Input; },
+        &Asr,
+        nullptr);
+
+    FVoiceTurnRequest Request;
+    Request.AudioInput = TEXT("pcm-bytes");
+    Request.TextInput = TEXT("");
+
+    const FVoiceTurnResult Result = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("На timeout должен быть код ASR_TIMEOUT"),
+              Result.DiagnosticCode,
+              FString(TEXT("FVoiceSessionOrchestrator:ASR_TIMEOUT")));
+    TestTrue(TEXT("На timeout нужен prompt repeat"), Result.bShouldPromptRepeat);
+    TestTrue(TEXT("На timeout нужен fallback в текст"), Result.bSwitchedToText);
+    TestTrue(TEXT("Ответ должен просить повтор"), Result.TextResponse.Contains(TEXT("Повторите"), false));
     return true;
 }
 

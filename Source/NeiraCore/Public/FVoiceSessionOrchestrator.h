@@ -10,8 +10,9 @@ using FTextPipelineHandler = TFunction<FString(const FString&)>;
  *
  * Контракт:
  * - bVoiceEnabled=false: только текстовый путь, как в legacy-режиме.
- * - ASR timeout/empty: явный fail-path (prompt repeat + switch to text).
- * - TTS failure: текстовый ответ возвращается всегда, контекст не теряется.
+ * - Голосовой путь: VAD -> ASR -> Intent -> Action -> TTS.
+ *   (Intent/Action выполняются внутри TextHandler как шаги текстового pipeline).
+ * - На сбоях возвращается DiagnosticCode + fallback в текст.
  */
 struct NEIRACORE_API FVoiceSessionOrchestrator : public IVoiceGateway
 {
