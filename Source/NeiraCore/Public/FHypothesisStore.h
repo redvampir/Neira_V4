@@ -14,12 +14,13 @@
  */
 struct NEIRACORE_API FHypothesis
 {
-    FString         Claim;                              // утверждение
-    FString         Source;                             // откуда пришло
-    float           Confidence    = 0.0f;               // [0..1]
-    EKnowledgeState State         = EKnowledgeState::Pending;
-    FString         Reason;                             // причина текущего статуса
-    int32           ConfirmCount  = 0;                  // v0.2: счётчик подтверждений
+    FString            Claim;                              // утверждение
+    FString            Source;                             // свободный комментарий об источнике
+    float              Confidence    = 0.0f;               // [0..1]
+    EKnowledgeState    State         = EKnowledgeState::Pending;
+    FString            Reason;                             // причина текущего статуса
+    int32              ConfirmCount  = 0;                  // v0.2: счётчик подтверждений
+    EHypothesisSource  SourceType    = EHypothesisSource::Unknown; // v0.4: тип источника
 };
 
 /**
@@ -58,7 +59,10 @@ struct NEIRACORE_API FHypothesisEvent
  * v0.3: добавлен append-only EventLog.
  * Каждый успешный переход состояния записывается в EventLog.
  *
- * Реализация: v0.3
+ * v0.4: добавлены Downgrade() (переходы вниз) и FindByClaim() (поиск по утверждению).
+ * EHypothesisSource указывается при Store() через поле SourceType в FHypothesis.
+ *
+ * Реализация: v0.4
  */
 struct NEIRACORE_API FHypothesisStore
 {
@@ -93,6 +97,22 @@ struct NEIRACORE_API FHypothesisStore
      * Зафиксировать конфликт. Любой статус → Conflicted.
      */
     bool MarkConflicted(int32 HypothesisID, const FString& Reason);
+
+    /**
+     * Понизить статус гипотезы (v0.4):
+     *   VerifiedKnowledge → Conflicted
+     *   Confirmed         → Pending (ConfirmCount сбрасывается в 0)
+     *   Pending/Conflicted/Deprecated → false
+     * Только успешный переход пишется в EventLog.
+     */
+    bool Downgrade(int32 HypothesisID, const FString& Reason);
+
+    /**
+     * Найти гипотезу по тексту утверждения (Claim).
+     * Возвращает ID первого совпадения или -1 если не найдено.
+     * v0.4: используется FBeliefEngine для поиска перед подтверждением.
+     */
+    int32 FindByClaim(const FString& Claim) const;
 
     /**
      * Проверить, достаточно ли подтверждений для верификации.

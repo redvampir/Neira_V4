@@ -338,4 +338,184 @@ bool FHypothesisStore_MarkConflicted_AlreadyConflicted_StillOk::RunTest(const FS
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Downgrade (v0.4)
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Downgrade_VerifiedToConflicted,
+    "Neira.HypothesisStore.Downgrade_VerifiedToConflicted",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Downgrade_VerifiedToConflicted::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("знание");
+    int32 ID = Store.Store(H);
+    Store.Confirm(ID, TEXT("раз"));
+    Store.Confirm(ID, TEXT("два"));
+    Store.Verify(ID, TEXT("верифицировано"));
+
+    bool bOk = Store.Downgrade(ID, TEXT("найдено противоречие"));
+    TestTrue(TEXT("Downgrade из Verified → true"), bOk);
+    TestEqual(TEXT("State → Conflicted"),
+        Store.Find(ID)->State, EKnowledgeState::Conflicted);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Downgrade_ConfirmedToPending_ResetsCount,
+    "Neira.HypothesisStore.Downgrade_ConfirmedToPending_ResetsCount",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Downgrade_ConfirmedToPending_ResetsCount::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("знание");
+    int32 ID = Store.Store(H);
+    Store.Confirm(ID, TEXT("раз"));
+    Store.Confirm(ID, TEXT("два"));
+
+    bool bOk = Store.Downgrade(ID, TEXT("отзыв подтверждения"));
+    TestTrue(TEXT("Downgrade из Confirmed → true"), bOk);
+    TestEqual(TEXT("State → Pending"),
+        Store.Find(ID)->State, EKnowledgeState::Pending);
+    TestEqual(TEXT("ConfirmCount сброшен в 0"),
+        Store.Find(ID)->ConfirmCount, 0);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Downgrade_PendingReturnsFalse,
+    "Neira.HypothesisStore.Downgrade_PendingReturnsFalse",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Downgrade_PendingReturnsFalse::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("знание");
+    int32 ID = Store.Store(H);
+
+    int32 LogBefore = Store.GetEventLog().Num();
+    bool bOk = Store.Downgrade(ID, TEXT("попытка из Pending"));
+    TestFalse(TEXT("Downgrade из Pending → false"), bOk);
+    TestEqual(TEXT("EventLog не вырос"), Store.GetEventLog().Num(), LogBefore);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Downgrade_ConflictedReturnsFalse,
+    "Neira.HypothesisStore.Downgrade_ConflictedReturnsFalse",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Downgrade_ConflictedReturnsFalse::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("знание");
+    int32 ID = Store.Store(H);
+    Store.MarkConflicted(ID, TEXT("конфликт"));
+
+    bool bOk = Store.Downgrade(ID, TEXT("попытка из Conflicted"));
+    TestFalse(TEXT("Downgrade из Conflicted → false"), bOk);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Downgrade_WritesToEventLog,
+    "Neira.HypothesisStore.Downgrade_WritesToEventLog",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Downgrade_WritesToEventLog::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("знание");
+    int32 ID = Store.Store(H);
+    Store.Confirm(ID, TEXT("раз"));
+    Store.Confirm(ID, TEXT("два"));
+    Store.Verify(ID, TEXT("верификация"));
+
+    int32 LogBefore = Store.GetEventLog().Num();
+    Store.Downgrade(ID, TEXT("деградация"));
+
+    const auto& Log = Store.GetEventLog();
+    TestEqual(TEXT("EventLog вырос на 1"), Log.Num(), LogBefore + 1);
+    const FHypothesisEvent& Last = Log[Log.Num() - 1];
+    TestEqual(TEXT("MethodName = Downgrade"),
+        Last.MethodName, FString(TEXT("Downgrade")));
+    TestEqual(TEXT("FromState = VerifiedKnowledge"),
+        Last.FromState, EKnowledgeState::VerifiedKnowledge);
+    TestEqual(TEXT("ToState = Conflicted"),
+        Last.ToState, EKnowledgeState::Conflicted);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// EHypothesisSource / SourceType (v0.4)
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Source_DefaultIsUnknown,
+    "Neira.HypothesisStore.Source_DefaultIsUnknown",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Source_DefaultIsUnknown::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("тест");
+    int32 ID = Store.Store(H);
+    const FHypothesis* Stored = Store.Find(ID);
+    TestEqual(TEXT("SourceType по умолчанию = Unknown"),
+        Stored->SourceType, EHypothesisSource::Unknown);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Source_SetOnStore,
+    "Neira.HypothesisStore.Source_SetOnStore",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Source_SetOnStore::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim      = TEXT("тест");
+    H.SourceType = EHypothesisSource::Dictionary;
+    int32 ID = Store.Store(H);
+    const FHypothesis* Stored = Store.Find(ID);
+    TestEqual(TEXT("SourceType сохраняется"),
+        Stored->SourceType, EHypothesisSource::Dictionary);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// FindByClaim (v0.4)
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_FindByClaim_ReturnsID,
+    "Neira.HypothesisStore.FindByClaim_ReturnsCorrectID",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_FindByClaim_ReturnsID::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim = TEXT("искомое");
+    int32 ExpectedID = Store.Store(H);
+
+    int32 FoundID = Store.FindByClaim(TEXT("искомое"));
+    TestEqual(TEXT("FindByClaim возвращает правильный ID"), FoundID, ExpectedID);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_FindByClaim_ReturnsMinusOne_IfNotFound,
+    "Neira.HypothesisStore.FindByClaim_ReturnsMinusOne_IfNotFound",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_FindByClaim_ReturnsMinusOne_IfNotFound::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    int32 ID = Store.FindByClaim(TEXT("несуществующее"));
+    TestEqual(TEXT("FindByClaim → -1 если не найдено"), ID, -1);
+    return true;
+}
+
 #undef NEIRA_TEST_FLAGS
