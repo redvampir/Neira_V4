@@ -1,5 +1,5 @@
 // IntentExtractorTests.cpp
-// Тесты для FIntentExtractor (v0.1)
+// Тесты для FIntentExtractor (v0.1 + v0.3)
 //
 // Запуск: Unreal Automation Tool → фильтр "Neira.IntentExtractor"
 // Все тесты должны ПАДАТЬ до реализации FIntentExtractor::Extract().
@@ -125,6 +125,107 @@ bool FIntentExtractor_UnknownPhrase_UnknownIntent::RunTest(const FString& Parame
     FIntentResult Result = Extractor.Extract(TEXT("бррр вжух"), EPhraseType::Unknown);
     TestEqual(TEXT("Неизвестная фраза → Intent::Unknown"),
         Result.IntentID, EIntentID::Unknown);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// v0.3: Frame-путь — извлечение через FSyntaxParser
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Frame_AbilityCheck_ReturnsAnswerAbility,
+    "Neira.IntentExtractor.Frame_AbilityCheck_ReturnsAnswerAbility",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Frame_AbilityCheck_ReturnsAnswerAbility::RunTest(const FString& Parameters)
+{
+    // FSyntaxParser определяет bIsAbilityCheck=true для «ты можешь X»
+    // ExtractFromFrame step 1 должен поймать это и вернуть AnswerAbility
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("ты можешь объяснять слова?"), EPhraseType::Question);
+    TestEqual(TEXT("Frame.AbilityCheck → AnswerAbility"),
+        Result.IntentID, EIntentID::AnswerAbility);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Frame_Question_EntityFromObject,
+    "Neira.IntentExtractor.Frame_QuestionWithObject_EntityFromFrame",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Frame_Question_EntityFromObject::RunTest(const FString& Parameters)
+{
+    // «что такое кот?» — FSyntaxParser даёт Object="кот"
+    // Frame path step 5: Question + Object → GetDefinition, EntityTarget из Frame.Object
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(TEXT("что такое кот?"), EPhraseType::Question);
+    TestEqual(TEXT("Intent → GetDefinition"), Result.IntentID, EIntentID::GetDefinition);
+    TestEqual(TEXT("EntityTarget из Frame.Object = 'кот'"),
+        Result.EntityTarget, FString(TEXT("кот")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Frame_FindPredicate_ReturnsFindMeaning,
+    "Neira.IntentExtractor.Frame_CommandFind_ReturnsFindMeaning",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Frame_FindPredicate_ReturnsFindMeaning::RunTest(const FString& Parameters)
+{
+    // «найди значение слова» — Predicate="найти", Object="значение"
+    // Frame step 3: IsFindPredicate + IsDefinitionObject → FindMeaning
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("найди значение слова"), EPhraseType::Command);
+    TestEqual(TEXT("Frame.найти+значение → FindMeaning"),
+        Result.IntentID, EIntentID::FindMeaning);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// v0.3: DecisionTrace — объяснимость решений
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_DecisionTrace_NotEmpty_OnKnownIntent,
+    "Neira.IntentExtractor.DecisionTrace_NotEmpty_OnKnownIntent",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_DecisionTrace_NotEmpty_OnKnownIntent::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(TEXT("что такое кот?"), EPhraseType::Question);
+    TestFalse(TEXT("DecisionTrace не пустой для известного Intent"),
+        Result.DecisionTrace.IsEmpty());
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_DecisionTrace_ContainsFrame_WhenFrameResolved,
+    "Neira.IntentExtractor.DecisionTrace_ContainsFrame_OnFrameResolved",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_DecisionTrace_ContainsFrame_WhenFrameResolved::RunTest(const FString& Parameters)
+{
+    // «что такое кот?» должно разрешаться через Frame-путь
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(TEXT("что такое кот?"), EPhraseType::Question);
+    TestTrue(TEXT("DecisionTrace содержит 'Frame.'"),
+        Result.DecisionTrace.Contains(TEXT("Frame.")));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Negative тест: пустой ввод
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Empty_ReturnsUnknown,
+    "Neira.IntentExtractor.EmptyInput_ReturnsUnknown",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Empty_ReturnsUnknown::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(TEXT(""), EPhraseType::Unknown);
+    TestEqual(TEXT("Пустой ввод → Intent::Unknown"),
+        Result.IntentID, EIntentID::Unknown);
+    TestTrue(TEXT("Пустой ввод → Confidence == 0"), Result.Confidence == 0.0f);
     return true;
 }
 

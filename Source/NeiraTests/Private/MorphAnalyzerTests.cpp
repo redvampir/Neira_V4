@@ -196,6 +196,32 @@ bool FMorphAnalyzer_StripQuestionMark::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMorphAnalyzer_EmptyString,
+    "Neira.MorphAnalyzer.EmptyString_ReturnsUnknown",
+    NEIRA_TEST_FLAGS)
+bool FMorphAnalyzer_EmptyString::RunTest(const FString& Parameters)
+{
+    FMorphAnalyzer A;
+    FMorphResult R = A.Analyze(TEXT(""));
+    TestEqual(TEXT("Пустая строка → POS Unknown"), R.PartOfSpeech, EPosTag::Unknown);
+    TestTrue(TEXT("Пустая строка → Confidence < 0.5"), R.Confidence < 0.5f);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMorphAnalyzer_LatinWord,
+    "Neira.MorphAnalyzer.LatinWord_ReturnsUnknown",
+    NEIRA_TEST_FLAGS)
+bool FMorphAnalyzer_LatinWord::RunTest(const FString& Parameters)
+{
+    // Словарь и суффиксы ориентированы на кириллицу
+    FMorphAnalyzer A;
+    FMorphResult R = A.Analyze(TEXT("hello"));
+    TestEqual(TEXT("Латинское слово → POS Unknown"), R.PartOfSpeech, EPosTag::Unknown);
+    return true;
+}
+
 // ===========================================================================
 // FHypothesisStore v0.2 — правила устойчивого перехода
 // ===========================================================================
