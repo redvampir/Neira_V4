@@ -139,6 +139,34 @@ namespace
             || TokenLower == TEXT("выражение");
     }
 
+
+    FString StripLeadingTermMetaToken(const FString& RawTerm)
+    {
+        FString Result = CleanEntity(RawTerm);
+        const TArray<FString> Prefixes = {
+            TEXT("слово "), TEXT("слова "), TEXT("термин "), TEXT("термина "),
+            TEXT("понятие "), TEXT("выражение ")
+        };
+
+        bool bChanged = true;
+        while (bChanged)
+        {
+            bChanged = false;
+            const FString Lower = Result.ToLower();
+            for (const FString& Prefix : Prefixes)
+            {
+                if (Lower.StartsWith(Prefix, false))
+                {
+                    Result = CleanEntity(Result.Mid(Prefix.Len()));
+                    bChanged = true;
+                    break;
+                }
+            }
+        }
+
+        return Result;
+    }
+
     bool TryExtractTermByExplicitPattern(const FString& Phrase, FString& OutTerm)
     {
         const FString Lower = Phrase.ToLower();
@@ -158,7 +186,7 @@ namespace
                 continue;
 
             const int32 EntityStart = MarkerPos + Marker.Len();
-            OutTerm = CleanEntity(Phrase.Mid(EntityStart));
+            OutTerm = StripLeadingTermMetaToken(Phrase.Mid(EntityStart));
             if (!OutTerm.IsEmpty() && !IsTermMetaToken(OutTerm.ToLower()))
             {
                 return true;
@@ -188,7 +216,7 @@ namespace
 
             if (bMetaSeen && Token.PartOfSpeech == EPosTag::Noun)
             {
-                OutTerm = CleanEntity(Token.OriginalWord);
+                OutTerm = StripLeadingTermMetaToken(Token.OriginalWord);
                 return !OutTerm.IsEmpty();
             }
         }
