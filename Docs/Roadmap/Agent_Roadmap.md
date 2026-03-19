@@ -62,13 +62,13 @@
 
 ## 4.1) Технический checklist закрытия DoD v0.3
 
-Статус на **2026-03-19**: 4/7 пунктов закрыты, 3/7 открыты.
+Статус на **2026-03-19**: 5/7 пунктов закрыты, 2/7 открыты.
 
 - [x] Базовый `FSyntaxParser` + unit-тесты (`Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
 - [x] `DecisionTrace` в intent-пайплайне + тесты (`Source/NeiraCore/Public/FIntentExtractor.h`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/IntentExtractorTests.cpp`).
 - [x] `EventLog` переходов гипотез + тесты (`Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`).
 - [x] Ambiguous-trace на уровне каждого `AmbiguousToken` (реализован `FAmbiguousDecisionTrace` + deterministic tie-break + unit-тесты; целевые точки: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
-- [ ] Memory pressure degradation (`Medium/High/Critical`) с тестируемыми гарантиями HOT/WARM/COLD+anchor (целевые точки: новые policy+tests в `Source/NeiraCore/*` и `Source/NeiraTests/*`).
+- [x] Memory pressure degradation (`Medium/High/Critical`) с тестируемыми гарантиями HOT/WARM/COLD+anchor (реализован `FMemoryPressurePolicy` с API статуса/причины деградации и unit-тестами переходов/anchor-recovery; целевые точки: `Source/NeiraCore/Public/FMemoryPressurePolicy.h`, `Source/NeiraCore/Private/FMemoryPressurePolicy.cpp`, `Source/NeiraTests/Private/MemoryPressurePolicyTests.cpp`).
 - [ ] Full fail-reason pipeline от синтаксиса до ответа (целевые точки: `Source/NeiraCore/Public/FActionTypes.h`, `Source/NeiraCore/Public/NeiraTypes.h`, `Source/NeiraCore/Private/FActionRegistry.cpp`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/*`).
 - [ ] Threshold regression gate по `topic_change_threshold` и confidence thresholds на фиксированном RU/EN-наборе (целевые точки: regression harness в `Source/NeiraTests/*`, фиксация в `Docs/Roadmap/Agent_Roadmap.md`).
 
