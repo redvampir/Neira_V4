@@ -48,11 +48,14 @@ enum class EActionID : uint8
 
 enum class EActionFailReason : uint8
 {
-    None,            // успех
-    NotFound,        // объект не найден
-    NotSupported,    // действие не реализовано
-    LowConfidence,   // уверенность ниже порога
-    InternalError,   // ошибка выполнения
+    None,           // успех
+    EmptyInput,     // входная строка пустая/из пробелов
+    PartialParse,   // синтаксис разобран частично, intent не извлечён полностью
+    UnknownIntent,  // fallback сработал, но намерение не распознано
+    NotFound,       // объект не найден
+    NotSupported,   // действие не реализовано
+    LowConfidence,  // уверенность ниже порога
+    InternalError,  // ошибка выполнения
 };
 
 // ---------------------------------------------------------------------------

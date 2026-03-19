@@ -125,6 +125,12 @@ bool FIntentExtractor_UnknownPhrase_UnknownIntent::RunTest(const FString& Parame
     FIntentResult Result = Extractor.Extract(TEXT("бррр вжух"), EPhraseType::Unknown);
     TestEqual(TEXT("Неизвестная фраза → Intent::Unknown"),
         Result.IntentID, EIntentID::Unknown);
+    TestEqual(TEXT("Unknown intent → FailReason::UnknownIntent"),
+        Result.FailReason, EActionFailReason::UnknownIntent);
+    TestFalse(TEXT("Unknown intent → DiagnosticNote не пустой"),
+        Result.DiagnosticNote.IsEmpty());
+    TestTrue(TEXT("Unknown intent проходит через fallback"),
+        Result.DecisionTrace.Contains(TEXT("Fallback:Unknown")));
     return true;
 }
 
@@ -256,6 +262,35 @@ bool FIntentExtractor_Empty_ReturnsUnknown::RunTest(const FString& Parameters)
     TestEqual(TEXT("Пустой ввод → Intent::Unknown"),
         Result.IntentID, EIntentID::Unknown);
     TestTrue(TEXT("Пустой ввод → Confidence == 0"), Result.Confidence == 0.0f);
+    TestEqual(TEXT("Пустой ввод → FailReason::EmptyInput"),
+        Result.FailReason, EActionFailReason::EmptyInput);
+    TestFalse(TEXT("Пустой ввод → DiagnosticNote не пустой"),
+        Result.DiagnosticNote.IsEmpty());
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Negative/edge: синтаксическая ошибка + частичный разбор
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_SyntaxError_PartialParse,
+    "Neira.IntentExtractor.SyntaxError_PartialParse_ReturnsReasonAndDiagnostic",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_SyntaxError_PartialParse::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(TEXT("найди значение"), EPhraseType::Command);
+
+    TestEqual(TEXT("Частично разобранная команда без термина → Intent::Unknown"),
+        Result.IntentID, EIntentID::Unknown);
+    TestEqual(TEXT("Частичный синтаксический разбор → FailReason::PartialParse"),
+        Result.FailReason, EActionFailReason::PartialParse);
+    TestFalse(TEXT("PartialParse → DiagnosticNote не пустой"),
+        Result.DiagnosticNote.IsEmpty());
+    TestTrue(TEXT("DecisionTrace сохраняет frame и fallback шаги"),
+        Result.DecisionTrace.Contains(TEXT("Frame.PartialParse"))
+        && Result.DecisionTrace.Contains(TEXT("Fallback:Unknown")));
     return true;
 }
 

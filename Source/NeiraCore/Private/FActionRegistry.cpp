@@ -47,5 +47,27 @@ FActionResult FActionRegistry::Execute(const FActionRequest& Request) const
 
     // 3. Выполнение
     Result = (*Handler)(Request);
+
+    // Нормализация контракта ошибки:
+    // при любом неуспехе обязателен валидный FailReason + диагностическая причина.
+    if (!Result.bSuccess)
+    {
+        if (Result.FailReason == EActionFailReason::None)
+        {
+            Result.FailReason = EActionFailReason::InternalError;
+        }
+
+        if (Result.DiagnosticNote.IsEmpty())
+        {
+            Result.DiagnosticNote = FString::Printf(
+                TEXT("Action %d завершилось неуспешно без диагностической причины."),
+                static_cast<int32>(Request.ActionID));
+        }
+    }
+    else
+    {
+        Result.FailReason = EActionFailReason::None;
+    }
+
     return Result;
 }
