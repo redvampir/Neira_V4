@@ -19,7 +19,8 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/MorphAnalyzerTests.cpp \
             ../NeiraTests/Private/SyntaxParserTests.cpp \
             ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
-            ../NeiraTests/Private/ThresholdRegressionGateTests.cpp
+            ../NeiraTests/Private/ThresholdRegressionGateTests.cpp \
+            ../NeiraTests/Private/DoDIntegrationTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
