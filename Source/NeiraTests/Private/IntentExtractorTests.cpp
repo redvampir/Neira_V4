@@ -180,6 +180,36 @@ bool FIntentExtractor_Frame_FindPredicate_ReturnsFindMeaning::RunTest(const FStr
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Frame_FindMeaning_ExtractsSyntaxisTerm,
+    "Neira.IntentExtractor.Frame_FindMeaning_ExtractsTermAfterMetaWord",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Frame_FindMeaning_ExtractsSyntaxisTerm::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("найди значение слова синтаксис"), EPhraseType::Command);
+    TestEqual(TEXT("Intent → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
+    TestEqual(TEXT("EntityTarget → 'синтаксис'"),
+        Result.EntityTarget, FString(TEXT("синтаксис")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Frame_FindMeaning_ExtractsMorphologyTerm,
+    "Neira.IntentExtractor.Frame_FindMeaning_ExtractsTermAfterTermMetaWord",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Frame_FindMeaning_ExtractsMorphologyTerm::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("найди определение термина морфология"), EPhraseType::Command);
+    TestEqual(TEXT("Intent → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
+    TestEqual(TEXT("EntityTarget → 'морфология'"),
+        Result.EntityTarget, FString(TEXT("морфология")));
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // v0.3: DecisionTrace — объяснимость решений
 // ---------------------------------------------------------------------------
