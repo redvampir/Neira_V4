@@ -223,6 +223,71 @@ bool FMorphAnalyzer_LatinWord::RunTest(const FString& Parameters)
 }
 
 // ===========================================================================
+// Доменные пакеты v0.4: action/text-diagnostics/memory-knowledge
+// ===========================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMorphAnalyzer_DomainPackages_LemmasAndForms,
+    "Neira.MorphAnalyzer.DomainPackages.LemmasAndFrequentForms",
+    NEIRA_TEST_FLAGS)
+bool FMorphAnalyzer_DomainPackages_LemmasAndForms::RunTest(const FString& Parameters)
+{
+    FMorphAnalyzer A;
+
+    // action_commands
+    FMorphResult CheckVerb = A.Analyze(TEXT("проверь"));
+    TestEqual(TEXT("action_commands: 'проверь' → lemma=проверить"),
+        CheckVerb.Lemma, FString(TEXT("проверить")));
+
+    FMorphResult OpenInf = A.Analyze(TEXT("открыть"));
+    TestEqual(TEXT("action_commands: 'открыть' → POS Verb"),
+        OpenInf.PartOfSpeech, EPosTag::Verb);
+
+    // text_diagnostics
+    FMorphResult ExplainVerb = A.Analyze(TEXT("объясни"));
+    TestEqual(TEXT("text_diagnostics: 'объясни' → lemma=объяснить"),
+        ExplainVerb.Lemma, FString(TEXT("объяснить")));
+
+    FMorphResult TextGenitive = A.Analyze(TEXT("текста"));
+    TestEqual(TEXT("text_diagnostics: 'текста' → lemma=текст"),
+        TextGenitive.Lemma, FString(TEXT("текст")));
+
+    // memory_knowledge
+    FMorphResult MemoryGenitive = A.Analyze(TEXT("памяти"));
+    TestEqual(TEXT("memory_knowledge: 'памяти' → lemma=память"),
+        MemoryGenitive.Lemma, FString(TEXT("память")));
+
+    FMorphResult TermGenitive = A.Analyze(TEXT("термина"));
+    TestEqual(TEXT("memory_knowledge: 'термина' → POS Noun"),
+        TermGenitive.PartOfSpeech, EPosTag::Noun);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMorphAnalyzer_DomainPackages_BoundaryTokens,
+    "Neira.MorphAnalyzer.DomainPackages.BoundaryTokens",
+    NEIRA_TEST_FLAGS)
+bool FMorphAnalyzer_DomainPackages_BoundaryTokens::RunTest(const FString& Parameters)
+{
+    FMorphAnalyzer A;
+
+    FMorphResult WhatToken = A.Analyze(TEXT("что"));
+    TestEqual(TEXT("boundary: 'что' → POS Conjunction"),
+        WhatToken.PartOfSpeech, EPosTag::Conjunction);
+
+    FMorphResult HowToken = A.Analyze(TEXT("как"));
+    TestEqual(TEXT("boundary: 'как' → POS Conjunction"),
+        HowToken.PartOfSpeech, EPosTag::Conjunction);
+
+    FMorphResult MeaningToken = A.Analyze(TEXT("значение"));
+    TestEqual(TEXT("boundary: 'значение' → POS Noun"),
+        MeaningToken.PartOfSpeech, EPosTag::Noun);
+
+    return true;
+}
+
+// ===========================================================================
 // FHypothesisStore v0.2 — правила устойчивого перехода
 // ===========================================================================
 

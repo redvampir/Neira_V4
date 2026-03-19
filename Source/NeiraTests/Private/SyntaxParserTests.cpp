@@ -271,4 +271,58 @@ bool FSyntaxParser_AmbiguousToken_DeterministicAcrossRuns::RunTest(const FString
     return true;
 }
 
+// ===========================================================================
+// Доменные пакеты regression-v0.4: action / diagnostics / memory
+// ===========================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSyntaxParser_DomainPackages_Frames,
+    "Neira.SyntaxParser.DomainPackages.Frames",
+    NEIRA_TEST_FLAGS)
+bool FSyntaxParser_DomainPackages_Frames::RunTest(const FString& Parameters)
+{
+    FSyntaxParser Parser;
+
+    {
+        FSemanticFrame F = Parser.Parse(TEXT("проверь окно"), EPhraseType::Command);
+        TestEqual(TEXT("action_commands: Predicate=проверить"), F.Predicate, FString(TEXT("проверить")));
+        TestEqual(TEXT("action_commands: Object=окно"), F.Object, FString(TEXT("окно")));
+    }
+
+    {
+        FSemanticFrame F = Parser.Parse(TEXT("расскажи что такое морфология"), EPhraseType::Request);
+        TestEqual(TEXT("text_diagnostics: Predicate=рассказать"), F.Predicate, FString(TEXT("рассказать")));
+        TestEqual(TEXT("text_diagnostics: Object=морфология"), F.Object, FString(TEXT("морфология")));
+        TestTrue(TEXT("text_diagnostics: nested clause detected"), F.bHasNestedClause);
+    }
+
+    {
+        FSemanticFrame F = Parser.Parse(TEXT("что означает слово память"), EPhraseType::Question);
+        TestEqual(TEXT("memory_knowledge: Predicate=означать"), F.Predicate, FString(TEXT("означать")));
+        TestEqual(TEXT("memory_knowledge: Object=слово"), F.Object, FString(TEXT("слово")));
+        TestFalse(TEXT("memory_knowledge: no negation"), F.bIsNegated);
+    }
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSyntaxParser_DomainPackages_AmbiguousBoundaryTrace,
+    "Neira.SyntaxParser.DomainPackages.AmbiguousBoundaryTrace",
+    NEIRA_TEST_FLAGS)
+bool FSyntaxParser_DomainPackages_AmbiguousBoundaryTrace::RunTest(const FString& Parameters)
+{
+    FSyntaxParser Parser;
+    FSemanticFrame F = Parser.Parse(TEXT("как открыть окно"), EPhraseType::Question);
+
+    const FSemanticFrame::FAmbiguousDecisionTrace* Trace = FindTraceByToken(F, TEXT("как"));
+    TestNotNull(TEXT("Ambiguity trace для 'как' присутствует"), Trace);
+    if (Trace == nullptr)
+        return false;
+
+    TestEqual(TEXT("Для 'как' выбран POS Conjunction"), Trace->SelectedPOS, FString(TEXT("Conjunction")));
+    TestTrue(TEXT("Confidence > 0"), Trace->Confidence > 0.0f);
+    return true;
+}
+
 #undef NEIRA_TEST_FLAGS
