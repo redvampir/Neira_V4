@@ -18,15 +18,16 @@ bool FResponseGenerator_ProfileV1_SnapshotContract::RunTest(const FString& Param
         EResponseInitiative::Low);
 
     FResponseGenerationInput Input;
-    Input.IntentID = EIntentID::GetDefinition;
     Input.ContextKey = TEXT("session_main");
-    Input.SemanticCore = TEXT("синтаксис — раздел лингвистики о построении предложений");
+    Input.SemanticDecision.IntentID = EIntentID::GetDefinition;
+    Input.SemanticDecision.SemanticCore = TEXT("синтаксис — раздел лингвистики о построении предложений");
 
     const FResponseGenerationOutput Out = Generator.Generate(Input, Profile);
 
     const FString Expected =
-        TEXT("[profile=personality_profile_v1; tone=calm; len=short; initiative=low; format=v1.intent_1.ctx_session_main.tone_calm.len_short.init_low]\n")
+        TEXT("[profile=personality_profile_v1; tone=calm; len=short; initiative=low; address=neutral_you; format=v1.intent_1.ctx_session_main.tone_calm.len_short.init_low.addr_neutral_you]\n")
         TEXT("Тон: спокойный.\n")
+        TEXT("Обращение: нейтральное, на «вы».\n")
         TEXT("Инициатива: низкая.\n")
         TEXT("Ответ: определение — синтаксис — раздел лингвистики о построении предложений.\n")
         TEXT("Ограничение: факты не выдумываю.");
@@ -35,6 +36,7 @@ bool FResponseGenerator_ProfileV1_SnapshotContract::RunTest(const FString& Param
 
     TestTrue(TEXT("Обязателен блок profile"), Out.ResponseText.Contains(TEXT("[profile=personality_profile_v1")));
     TestTrue(TEXT("Обязателен блок tone"), Out.ResponseText.Contains(TEXT("Тон:")));
+    TestTrue(TEXT("Обязателен блок address"), Out.ResponseText.Contains(TEXT("Обращение:")));
     TestTrue(TEXT("Обязателен блок answer"), Out.ResponseText.Contains(TEXT("Ответ:")));
     TestTrue(TEXT("Обязателен блок hallucination guard"), Out.ResponseText.Contains(TEXT("факты не выдумываю")));
 
@@ -54,11 +56,11 @@ bool FResponseGenerator_DeterministicPolicy_SameIntentContext::RunTest(const FSt
         EResponseInitiative::Medium);
 
     FResponseGenerationInput Input;
-    Input.IntentID = EIntentID::FindMeaning;
     Input.ContextKey = TEXT("dialog_42");
-    Input.SemanticCore = TEXT("лексема задаёт смысловое ядро запроса");
-    Input.bHasUncertainty = true;
-    Input.UncertaintyReason = TEXT("контекст предыдущего шага неполный");
+    Input.SemanticDecision.IntentID = EIntentID::FindMeaning;
+    Input.SemanticDecision.SemanticCore = TEXT("лексема задаёт смысловое ядро запроса");
+    Input.SemanticDecision.bHasUncertainty = true;
+    Input.SemanticDecision.UncertaintyReason = TEXT("контекст предыдущего шага неполный");
 
     const FResponseGenerationOutput First = Generator.Generate(Input, Profile);
     const FResponseGenerationOutput Second = Generator.Generate(Input, Profile);
@@ -84,9 +86,9 @@ bool FResponseGenerator_SemanticCore_InvariantAcrossTone::RunTest(const FString&
     const FString CoreMeaning = TEXT("порог confidence ограничивает запуск действия");
 
     FResponseGenerationInput Input;
-    Input.IntentID = EIntentID::AnswerAbility;
     Input.ContextKey = TEXT("ability_gate");
-    Input.SemanticCore = CoreMeaning;
+    Input.SemanticDecision.IntentID = EIntentID::AnswerAbility;
+    Input.SemanticDecision.SemanticCore = CoreMeaning;
 
     const FResponseGenerationOutput CalmOut = Generator.Generate(
         Input,
@@ -101,6 +103,44 @@ bool FResponseGenerator_SemanticCore_InvariantAcrossTone::RunTest(const FString&
     TestTrue(TEXT("Смысловое ядро должно сохраняться в calm"), CalmOut.ResponseText.Contains(CoreLine));
     TestTrue(TEXT("Смысловое ядро должно сохраняться в business"), BusinessOut.ResponseText.Contains(CoreLine));
     TestTrue(TEXT("Тон должен менять стилевую часть"), CalmOut.ResponseText != BusinessOut.ResponseText);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FResponseGenerator_AddressStyle_ChangesOnlyFormNotFacts,
+    "Neira.ResponseGenerator.AddressStyle.ChangesOnlyFormNotFacts",
+    NEIRA_TEST_FLAGS)
+bool FResponseGenerator_AddressStyle_ChangesOnlyFormNotFacts::RunTest(const FString& Parameters)
+{
+    FResponseGenerator Generator;
+
+    FResponseGenerationInput Input;
+    Input.ContextKey = TEXT("address_style");
+    Input.SemanticDecision.IntentID = EIntentID::GetWordFact;
+    Input.SemanticDecision.SemanticCore = TEXT("слово «берёза» — растение");
+
+    const FResponseGenerationOutput NeutralOut = Generator.Generate(
+        Input,
+        FResponsePersonalityProfile::MakeV1(
+            EResponseTone::Calm,
+            EResponseLength::Short,
+            EResponseInitiative::Low,
+            EResponseAddressStyle::NeutralYou));
+
+    const FResponseGenerationOutput FormalOut = Generator.Generate(
+        Input,
+        FResponsePersonalityProfile::MakeV1(
+            EResponseTone::Calm,
+            EResponseLength::Short,
+            EResponseInitiative::Low,
+            EResponseAddressStyle::FormalYou));
+
+    const FString FactLine = TEXT("Ответ: факт — слово «берёза» — растение.");
+    TestTrue(TEXT("Фактологическая строка сохраняется в neutral"), NeutralOut.ResponseText.Contains(FactLine));
+    TestTrue(TEXT("Фактологическая строка сохраняется в formal"), FormalOut.ResponseText.Contains(FactLine));
+    TestTrue(TEXT("Адрес-стиль меняет только форму"), NeutralOut.ResponseText != FormalOut.ResponseText);
+    TestTrue(TEXT("FormatID учитывает address стиль"), NeutralOut.FormatID != FormalOut.FormatID);
 
     return true;
 }

@@ -26,12 +26,20 @@ enum class EResponseInitiative : uint8
     Medium,
 };
 
+enum class EResponseAddressStyle : uint8
+{
+    NeutralYou, // Нейтрально на «вы»
+    FormalYou,  // Формально на «вы»
+    FriendlyYou // Дружелюбно на «ты»
+};
+
 struct NEIRACORE_API FResponsePersonalityProfile
 {
-    FString            ProfileID = TEXT("personality_profile_v1");
-    EResponseTone      Tone = EResponseTone::Calm;
-    EResponseLength    Length = EResponseLength::Short;
-    EResponseInitiative Initiative = EResponseInitiative::Low;
+    FString               ProfileID = TEXT("personality_profile_v1");
+    EResponseTone         Tone = EResponseTone::Calm;
+    EResponseLength       Length = EResponseLength::Short;
+    EResponseInitiative   Initiative = EResponseInitiative::Low;
+    EResponseAddressStyle AddressStyle = EResponseAddressStyle::NeutralYou;
 
     // Запреты v1:
     // 1) Не выдумывать факты.
@@ -41,17 +49,26 @@ struct NEIRACORE_API FResponsePersonalityProfile
 
     static FResponsePersonalityProfile MakeV1(EResponseTone InTone,
                                               EResponseLength InLength,
-                                              EResponseInitiative InInitiative);
+                                              EResponseInitiative InInitiative,
+                                              EResponseAddressStyle InAddressStyle = EResponseAddressStyle::NeutralYou);
 };
 
-struct NEIRACORE_API FResponseGenerationInput
+// Фактологическое решение: формируется NLU/knowledge-пайплайном.
+// Personality сюда НЕ входит.
+struct NEIRACORE_API FResponseSemanticDecision
 {
     EIntentID IntentID = EIntentID::Unknown;
-    FString   ContextKey;
     FString   SemanticCore;
 
     bool      bHasUncertainty = false;
     FString   UncertaintyReason;
+};
+
+// Рендеринг ответа: сочетает фактологическое решение и personality.
+struct NEIRACORE_API FResponseGenerationInput
+{
+    FString ContextKey;
+    FResponseSemanticDecision SemanticDecision;
 };
 
 struct NEIRACORE_API FResponseGenerationOutput
@@ -74,4 +91,5 @@ private:
     static FString ToString(EResponseTone Tone);
     static FString ToString(EResponseLength Length);
     static FString ToString(EResponseInitiative Initiative);
+    static FString ToString(EResponseAddressStyle AddressStyle);
 };
