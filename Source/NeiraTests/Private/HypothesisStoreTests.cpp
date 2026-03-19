@@ -109,6 +109,7 @@ bool FHypothesisStore_Verify_ConfirmedToVerified::RunTest(const FString& Paramet
     H.Claim = TEXT("вода мокрая");
     int32 ID = Store.Store(H);
     Store.Confirm(ID, TEXT("первое подтверждение"));
+    Store.Confirm(ID, TEXT("второе подтверждение"));  // v0.2: нужно MinConfirmCount=2
 
     bool bOk = Store.Verify(ID, TEXT("многократно подтверждено"));
     TestTrue(TEXT("Verify вернул true"), bOk);
