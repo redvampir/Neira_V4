@@ -137,7 +137,7 @@
 
 #### Что ещё не закрыто до полного DoD v0.3
 
-- ❌ **Ambiguous-trace на токен-уровне**: нет отдельного обязательного трассирования выбора для каждого `AmbiguousToken` с якорями/confidence/причиной выбора.
+- ✅ **Ambiguous-trace на токен-уровне**: добавлен `FAmbiguousDecisionTrace` в `FSyntaxParser` с token/index, кандидатами POS, выбранным вариантом, confidence, reason и anchor.
 - ❌ **Memory pressure degradation**: нет проверяемого режима деградации при `Medium/High/Critical` с гарантией HOT/WARM/COLD + anchor fallback.
 - ❌ **Full fail-reason pipeline**: нет end-to-end контура, где синтаксические ошибки стабильно дают частичный разбор + стандартизированный fail reason до генерации ответа.
 - ❌ **Threshold regression gate**: нет автоматического regression gate для изменений `topic_change_threshold` и confidence-порогов на фиксированном RU/EN-наборе.
@@ -150,7 +150,7 @@
   Целевые файлы: `Source/NeiraCore/Public/FIntentExtractor.h`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/IntentExtractorTests.cpp`.
 - [x] `EventLog` фиксирует успешные переходы состояний гипотез и доступен для проверки.  
   Целевые файлы: `Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`.
-- [ ] Добавить обязательный ambiguous-trace на токен-уровне и unit-тесты для каждого неоднозначного кейса.  
+- [x] Добавить обязательный ambiguous-trace на токен-уровне и unit-тесты для каждого неоднозначного кейса.
   Целевые точки расширения: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`.
 - [ ] Ввести memory pressure degradation policy + тесты сценариев `Medium/High/Critical`.
   Целевые точки расширения: модуль памяти (новые policy/тесты в `Source/NeiraCore/*` и `Source/NeiraTests/*`).
