@@ -15,6 +15,14 @@ namespace
 {
 constexpr float StoreThreshold = 0.30f;
 constexpr float ConfirmThreshold = 0.50f;
+constexpr float ThresholdEpsilon = 1e-6f;
+
+bool IsBelowThreshold(float Value, float Threshold)
+{
+    // NOTE: защищаем граничные случаи вида (0.50f / 0.85f) * 0.85f,
+    // где из-за float-округления получается 0.49999997.
+    return Value + ThresholdEpsilon < Threshold;
+}
 }
 
 float FBeliefEngine::GetSourceWeight(EHypothesisSource Source)
@@ -41,7 +49,7 @@ FBeliefDecision FBeliefEngine::Process(const FIntentResult& Intent,
 
     if (Intent.IntentID == EIntentID::StoreFact)
     {
-        if (AppliedConfidence < StoreThreshold)
+        if (IsBelowThreshold(AppliedConfidence, StoreThreshold))
         {
             Decision.Action = EBeliefAction::Rejected;
             Decision.Reason = TEXT("уверенность после взвешивания ниже порога 0.30");
@@ -65,7 +73,7 @@ FBeliefDecision FBeliefEngine::Process(const FIntentResult& Intent,
         Intent.IntentID == EIntentID::FindMeaning     ||
         Intent.IntentID == EIntentID::AnswerAbility)
     {
-        if (AppliedConfidence < ConfirmThreshold)
+        if (IsBelowThreshold(AppliedConfidence, ConfirmThreshold))
         {
             Decision.Action = EBeliefAction::Rejected;
             Decision.Reason = TEXT("уверенность после взвешивания ниже порога 0.50 для подтверждения");
