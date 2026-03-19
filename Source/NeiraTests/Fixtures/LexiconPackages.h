@@ -38,6 +38,12 @@ inline const TArray<FLexiconScenarioPackage>& GetLexiconScenarioPackages()
                 TEXT("щас"), TEXT("ща"), TEXT("пж"), TEXT("плиз"), TEXT("кароч"),
                 TEXT("кароче"), TEXT("проверька"), TEXT("запомена"), TEXT("значение"), TEXT("определение")
             }
+        },
+        {
+            TEXT("conversational_variants"),
+            {
+                TEXT("пожалуйста"), TEXT("алло"), TEXT("пжлст"), TEXT("эээ")
+            }
         }
     };
 

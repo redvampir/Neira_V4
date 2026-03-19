@@ -7,6 +7,7 @@
 
 #include "../Fixtures/LexiconPackages.h"
 #include "../Fixtures/RegressionIntentFrameFixtures.h"
+#include "../Fixtures/VoiceFixtures.h"
 
 #define NEIRA_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
@@ -109,6 +110,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FLexiconPackages_NoWordWithoutScenario::RunTest(const FString& Parameters)
 {
     const TArray<FRegressionFixture>& Fixtures = GetRUENRegressionFixtures();
+    const TArray<FVoiceFixture>& VoiceFixtures = GetVoiceFixtures();
     const TArray<FLexiconScenarioPackage>& Packages = GetLexiconScenarioPackages();
 
     for (const FLexiconScenarioPackage& Package : Packages)
@@ -128,6 +130,24 @@ bool FLexiconPackages_NoWordWithoutScenario::RunTest(const FString& Parameters)
                 {
                     bFoundScenario = true;
                     break;
+                }
+            }
+
+            if (!bFoundScenario)
+            {
+                for (const FVoiceFixture& VoiceFx : VoiceFixtures)
+                {
+                    if (VoiceFx.Category != Package.Name)
+                    {
+                        continue;
+                    }
+
+                    const FString LowerPhrase = VoiceFx.Phrase.ToLower();
+                    if (LowerPhrase.Contains(Word.ToLower()))
+                    {
+                        bFoundScenario = true;
+                        break;
+                    }
                 }
             }
 

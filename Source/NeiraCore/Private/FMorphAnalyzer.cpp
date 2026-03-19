@@ -114,6 +114,10 @@ namespace
         { TEXT("лишь"),     TEXT("лишь"),     EPosTag::Particle    },
         { TEXT("только"),   TEXT("только"),   EPosTag::Particle    },
         { TEXT("даже"),     TEXT("даже"),     EPosTag::Particle    },
+        { TEXT("пожалуйста"),TEXT("пожалуйста"),EPosTag::Particle  },
+        { TEXT("пжлст"),    TEXT("пожалуйста"),EPosTag::Particle   },
+        { TEXT("алло"),     TEXT("алло"),     EPosTag::Particle    },
+        { TEXT("эээ"),      TEXT("эээ"),      EPosTag::Particle    },
 
         // --- глаголы: быть/связочные ---
         { TEXT("это"),      TEXT("это"),      EPosTag::Particle    },  // частица-связка
