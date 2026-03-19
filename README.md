@@ -14,6 +14,7 @@
 
 ### Документы для координации работ
 
+- Индекс знаний проекта: `Docs/Knowledge/Knowledge_Index.md`
 - Дорожная карта для агентной работы: `Docs/Roadmap/Agent_Roadmap.md`
 - Критические архитектурные пробелы: `Docs/Architecture/Critical_Open_Architecture_Gaps.md`
 - Playbook для агентных сессий: `Docs/Agents/Agent_Playbook.md`
