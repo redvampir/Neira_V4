@@ -46,6 +46,30 @@ inline const TArray<FRegressionFixture>& GetRUENRegressionFixtures()
         { TEXT("ru_ambiguous_02"), TEXT("ambiguous_tokens"), TEXT("объясни как работает память"), EPhraseType::Request,
           EIntentID::GetWordFact, TEXT(""), TEXT("объяснить"), TEXT("память"), false, false, false },
 
+        // domain package: action_commands (lemma + frequent forms + boundary)
+        { TEXT("ru_action_lemma_01"), TEXT("action_commands"), TEXT("проверь окно"), EPhraseType::Command,
+          EIntentID::Unknown, TEXT(""), TEXT("проверить"), TEXT("окно"), false, false, false },
+        { TEXT("ru_action_freq_01"), TEXT("action_commands"), TEXT("можете открыть окно"), EPhraseType::Question,
+          EIntentID::GetDefinition, TEXT(""), TEXT("мочь"), TEXT("окно"), false, false, false },
+        { TEXT("ru_action_boundary_01"), TEXT("action_commands"), TEXT("как открыть окно"), EPhraseType::Question,
+          EIntentID::GetDefinition, TEXT(""), TEXT("открыть"), TEXT("окно"), false, false, false },
+
+        // domain package: text_diagnostics (lemma + frequent forms + boundary)
+        { TEXT("ru_diag_lemma_01"), TEXT("text_diagnostics"), TEXT("объясни синтаксис"), EPhraseType::Request,
+          EIntentID::GetWordFact, TEXT(""), TEXT("объяснить"), TEXT("синтаксис"), false, false, false },
+        { TEXT("ru_diag_freq_01"), TEXT("text_diagnostics"), TEXT("найди значение слова текста"), EPhraseType::Command,
+          EIntentID::FindMeaning, TEXT(""), TEXT("найти"), TEXT("значение"), false, false, false },
+        { TEXT("ru_diag_boundary_01"), TEXT("text_diagnostics"), TEXT("расскажи что такое морфология"), EPhraseType::Request,
+          EIntentID::GetWordFact, TEXT(""), TEXT("рассказать"), TEXT("морфология"), false, true, false },
+
+        // domain package: memory_knowledge (lemma + frequent forms + boundary)
+        { TEXT("ru_memory_lemma_01"), TEXT("memory_knowledge"), TEXT("найди определение термина память"), EPhraseType::Command,
+          EIntentID::FindMeaning, TEXT(""), TEXT("найти"), TEXT("определение"), false, false, false },
+        { TEXT("ru_memory_freq_01"), TEXT("memory_knowledge"), TEXT("расскажи про память"), EPhraseType::Request,
+          EIntentID::GetWordFact, TEXT(""), TEXT("рассказать"), TEXT("память"), false, false, false },
+        { TEXT("ru_memory_boundary_01"), TEXT("memory_knowledge"), TEXT("что означает слово память"), EPhraseType::Question,
+          EIntentID::GetDefinition, TEXT(""), TEXT("означать"), TEXT("слово"), false, true, false },
+
         // fallback
         { TEXT("en_fallback_01"), TEXT("fallback"), TEXT("what is syntax"), EPhraseType::Question,
           EIntentID::Unknown, TEXT(""), TEXT(""), TEXT(""), false, false, false },
