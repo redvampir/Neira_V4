@@ -966,6 +966,130 @@ v0.2 считается рабочей, если система умеет:
 
 ---
 
+## Система действий
+
+Действие — это то, что агент выполняет после того как определил намерение. Действия делятся на два класса:
+
+```text
+EActionClass::Internal  — агент работает сам с собой (память, контекст)
+EActionClass::External  — агент выдаёт результат пользователю (текст)
+```
+
+Это деление принципиально: External-действие всегда порождает `ResultText` в ответе. Internal-действие может не производить видимого текста — оно меняет внутреннее состояние агента.
+
+---
+
+### Каталог действий v0.1
+
+#### External — текстовые действия
+
+| ActionID | Что делает |
+|---|---|
+| `GET_DEFINITION` | Вернуть определение слова/понятия |
+| `GET_WORD_FACT` | Рассказать факт о слове (происхождение, морфология) |
+| `CHECK_TEXT_ERRORS` | Проверить текст на ошибки |
+| `FIND_MEANING` | Найти значение слова |
+| `ANSWER_ABILITY` | Ответить на вопрос «можешь ли ты X» |
+
+#### Internal — внутренние процессы
+
+| ActionID | Что делает |
+|---|---|
+| `STORE_FACT` | Сохранить утверждение в память фактов |
+| `RETRIEVE_FROM_MEMORY` | Достать факт или контекст из памяти |
+| `CHECK_MEMORY_LOAD` | Проверить объём оперативной памяти (HOT) |
+
+В v0.1 реализуются: все External + `STORE_FACT`. Остальные Internal — с v0.3.
+
+---
+
+### Контракт действия
+
+Каждое действие получает унифицированный `FActionRequest` и возвращает `FActionResult`.
+
+```text
+FActionRequest
+├── ActionID       : EActionID    — что выполнить
+├── EntityTarget   : FString      — объект действия (слово, фраза, текст)
+└── Confidence     : float        — уверенность интерпретации [0..1]
+
+FActionResult
+├── bSuccess       : bool
+├── ResultText     : FString      — для External-действий; пусто для Internal
+├── FailReason     : EActionFailReason
+└── DiagnosticNote : FString      — причина сбоя для логов
+```
+
+```text
+EActionFailReason:
+  None             — успех
+  NotFound         — объект не найден в памяти / словаре
+  NotSupported     — действие не реализовано в текущей версии
+  LowConfidence    — уверенность ниже минимального порога
+  InternalError    — ошибка выполнения
+```
+
+---
+
+### Поведение при сбое
+
+| FailReason | Поведение агента |
+|---|---|
+| `NotFound` | `bSuccess = false`, генератор формирует «не нашла» |
+| `NotSupported` | `bSuccess = false`, генератор формирует «пока не умею» |
+| `LowConfidence` | `bSuccess = false`, генератор добавляет низкий opener + уточняющий closer |
+| `InternalError` | `bSuccess = false`, залогировать, генератор формирует нейтральный fallback |
+
+Пустой ответ недопустим. Если действие не выполнилось по любой причине — генератор всегда строит ответ на основе `FailReason`.
+
+---
+
+### Реестр действий
+
+Реестр — статическая таблица `TMap<EActionID, FActionHandler>`. Заполняется при старте агента.
+
+```text
+FActionRegistry
+├── Register(EActionID, FActionHandler)  — регистрация обработчика
+├── Execute(FActionRequest) → FActionResult  — выполнение
+└── IsSupported(EActionID) → bool        — проверка наличия
+```
+
+Добавление нового действия в будущих версиях:
+1. Добавить `ActionID` в `EActionID`.
+2. Написать обработчик `FActionHandler`.
+3. Зарегистрировать в реестре при старте.
+4. Ни один существующий модуль не меняется.
+
+Реестр не знает о разделении Internal/External — это семантическое свойство самого ActionID, а не инфраструктурное.
+
+---
+
+### Связь с pipeline
+
+```text
+Intent
+  → ActionSelector (выбирает ActionID по Intent + PhraseType)
+      → FActionRegistry::Execute(FActionRequest)
+          → FActionResult
+              → FResponseGenerator (формирует текст)
+```
+
+`ActionSelector` — простая таблица `Intent → ActionID` в v0.1. Логика усложняется с v0.3, когда появятся вложенные намерения.
+
+---
+
+### Порядок реализации
+
+| Этап | Что реализовать |
+|---|---|
+| v0.1 | `EActionID`, `FActionRequest`, `FActionResult`, `EActionFailReason`, `FActionRegistry`, заглушки External-действий, `STORE_FACT` |
+| v0.2 | Реальная логика `GET_DEFINITION` и `FIND_MEANING` через словарь |
+| v0.3 | `RETRIEVE_FROM_MEMORY`, `CHECK_MEMORY_LOAD` |
+| v0.4 | `CHECK_TEXT_ERRORS` (требует морфологии + правил) |
+
+---
+
 ## Известные риски
 
 1. **Суффиксные правила без словаря быстро ломаются** на русском языке. Решение: словарь-ядро начиная с v0.2.
