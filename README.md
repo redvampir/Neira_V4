@@ -124,6 +124,41 @@
 - различение прямого действия и проверки возможности;
 - контекстный выбор интерпретации слова.
 
+#### Статус v0.3 (разделение факта реализации и полного DoD)
+
+- 🔄 **v0.3 реализовано частично**: базовый `FSyntaxParser`, `DecisionTrace` и `EventLog` уже есть в коде и покрыты unit-тестами.
+- ⏳ **v0.3 DoD выполнен полностью**: **нет**, остаются незакрытые технические пункты (см. checklist ниже).
+
+#### Что уже есть в репозитории
+
+- ✅ **Базовый синтаксический разбор**: `FSyntaxParser` (subject/predicate/object/recipient, ability/nested/negation).
+- ✅ **Объяснимость на уровне intent-решения**: `DecisionTrace` в `FIntentExtractor`.
+- ✅ **Транзакционный журнал переходов гипотез**: append-only `EventLog` в `FHypothesisStore`.
+
+#### Что ещё не закрыто до полного DoD v0.3
+
+- ❌ **Ambiguous-trace на токен-уровне**: нет отдельного обязательного трассирования выбора для каждого `AmbiguousToken` с якорями/confidence/причиной выбора.
+- ❌ **Memory pressure degradation**: нет проверяемого режима деградации при `Medium/High/Critical` с гарантией HOT/WARM/COLD + anchor fallback.
+- ❌ **Full fail-reason pipeline**: нет end-to-end контура, где синтаксические ошибки стабильно дают частичный разбор + стандартизированный fail reason до генерации ответа.
+- ❌ **Threshold regression gate**: нет автоматического regression gate для изменений `topic_change_threshold` и confidence-порогов на фиксированном RU/EN-наборе.
+
+#### Технический checklist закрытия DoD v0.3 (с целевыми файлами/тестами)
+
+- [x] `FSyntaxParser.Parse()` стабильно извлекает `Subject/Predicate/Object/Recipient` и флаги кадра.  
+  Целевые файлы: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`.
+- [x] `DecisionTrace` заполняется для сработавших путей intent-извлечения.  
+  Целевые файлы: `Source/NeiraCore/Public/FIntentExtractor.h`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/IntentExtractorTests.cpp`.
+- [x] `EventLog` фиксирует успешные переходы состояний гипотез и доступен для проверки.  
+  Целевые файлы: `Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`.
+- [ ] Добавить обязательный ambiguous-trace на токен-уровне и unit-тесты для каждого неоднозначного кейса.  
+  Целевые точки расширения: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`.
+- [ ] Ввести memory pressure degradation policy + тесты сценариев `Medium/High/Critical`.
+  Целевые точки расширения: модуль памяти (новые policy/тесты в `Source/NeiraCore/*` и `Source/NeiraTests/*`).
+- [ ] Довести full fail-reason pipeline от синтаксиса до ответа (без падения в `EMPTY_INPUT` при частичном разборе).
+  Целевые точки расширения: `Source/NeiraCore/Public/FActionTypes.h`, `Source/NeiraCore/Public/NeiraTypes.h`, `Source/NeiraCore/Private/FActionRegistry.cpp`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, тесты в `Source/NeiraTests/Private/*`.
+- [ ] Добавить threshold regression gate на RU/EN-корпусе для `topic_change_threshold` и confidence-порогов.
+  Целевые точки расширения: regression harness/fixtures (новые тестовые артефакты в `Source/NeiraTests` + docs-описание в `Docs/Roadmap/Agent_Roadmap.md`).
+
 #### Критерии готовности v0.3 (Definition of Done)
 
 v0.3 считается готовой только если одновременно выполнены все условия:
