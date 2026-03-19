@@ -28,7 +28,8 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
             ../NeiraTests/Private/DoDIntegrationTests.cpp \
             ../NeiraTests/Private/VoiceSessionOrchestratorSmokeTests.cpp \
-            ../NeiraTests/Private/ResponseGeneratorTests.cpp
+            ../NeiraTests/Private/ResponseGeneratorTests.cpp \
+            ../NeiraTests/Private/VoiceFixtureMetricsTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
