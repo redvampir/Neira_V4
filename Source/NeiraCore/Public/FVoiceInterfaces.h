@@ -73,6 +73,8 @@ struct NEIRACORE_API FVoiceTurnResult
     bool bShouldPromptRepeat = false;
     bool bSwitchedToText = false;
 
+    // Стабильный машинно-читаемый код сбоя оркестратора (если есть).
+    FString DiagnosticCode;
     FString DiagnosticNote;
 };
 
