@@ -11,10 +11,22 @@
 // ---------------------------------------------------------------------------
 struct NEIRACORE_API FSemanticFrame
 {
+    struct FAmbiguousDecisionTrace
+    {
+        FString Token;                      // токен, по которому был конфликт
+        int32 TokenIndex = INDEX_NONE;      // индекс токена в исходной фразе
+        TArray<FString> CandidatePOS;       // кандидаты POS/интерпретаций
+        FString SelectedPOS;                // выбранный вариант
+        float Confidence = 0.0f;            // уверенность выбора [0..1]
+        FString Reason;                     // причина (deterministic tie-break rule)
+        FString Anchor;                     // контекстный якорь, повлиявший на выбор
+    };
+
     FString Subject;      // субъект действия ("ты", "кот", "Москва")
     FString Predicate;    // глагол / действие ("открой", "является", "найди")
     FString Object;       // объект действия ("окно", "столицей", "определение")
     FString Recipient;    // адресат / бенефициар ("для меня", "тебе")
+    TArray<FAmbiguousDecisionTrace> AmbiguityTrace; // трассировка разрешения POS-конфликтов
 
     // Флаги
     bool bIsAbilityCheck = false;  // «ты можешь X?» — проверка возможности, не команда

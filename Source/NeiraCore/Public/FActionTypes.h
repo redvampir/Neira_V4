@@ -22,6 +22,6 @@ struct NEIRACORE_API FActionResult
 {
     bool              bSuccess       = false;
     FString           ResultText;         // для External-действий; пусто для Internal
-    EActionFailReason FailReason     = EActionFailReason::None;
+    EActionFailReason FailReason     = EActionFailReason::InternalError; // при bSuccess=false не должен быть None
     FString           DiagnosticNote;     // причина сбоя для логов
 };

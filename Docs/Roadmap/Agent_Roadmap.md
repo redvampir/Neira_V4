@@ -60,6 +60,27 @@
 
 ---
 
+## 4.1) Технический checklist закрытия DoD v0.3
+
+Статус на **2026-03-19**: 7/7 пунктов закрыты.
+
+- [x] Базовый `FSyntaxParser` + unit-тесты (`Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
+- [x] `DecisionTrace` в intent-пайплайне + тесты (`Source/NeiraCore/Public/FIntentExtractor.h`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/IntentExtractorTests.cpp`).
+- [x] `EventLog` переходов гипотез + тесты (`Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`).
+- [x] Ambiguous-trace на уровне каждого `AmbiguousToken` (реализован `FAmbiguousDecisionTrace` + deterministic tie-break + unit-тесты; целевые точки: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
+- [x] Memory pressure degradation (`Medium/High/Critical`) с тестируемыми гарантиями HOT/WARM/COLD+anchor (реализован `FMemoryPressurePolicy` с API статуса/причины деградации и unit-тестами переходов/anchor-recovery; целевые точки: `Source/NeiraCore/Public/FMemoryPressurePolicy.h`, `Source/NeiraCore/Private/FMemoryPressurePolicy.cpp`, `Source/NeiraTests/Private/MemoryPressurePolicyTests.cpp`).
+- [x] Full fail-reason pipeline от синтаксиса до ответа (добавлены интеграционные тесты `Source/NeiraTests/Private/DoDIntegrationTests.cpp`: end-to-end на PartialParse/DecisionTrace/threshold gate + связка с memory degradation).
+- [x] Threshold regression gate по `topic_change_threshold` и confidence thresholds на фиксированном RU/EN-наборе (добавлены fixtures `Source/NeiraTests/Fixtures/RegressionIntentFrameFixtures.h`, source-of-truth конфиг `Source/NeiraTests/Fixtures/RegressionThresholds.cfg`, gate-тест `Source/NeiraTests/Private/ThresholdRegressionGateTests.cpp`, цель запуска `make regression-gate`).
+
+
+### 4.2) Локальный/CI запуск regression gate
+
+- Обязательная команда локально: `cd Source/Tests && make regression-gate`.
+- Если подключается CI, эта же команда должна быть отдельной job (`regression-gate`) и блокировать merge при падении.
+- Policy: **любое изменение threshold-конфига (`RegressionThresholds.cfg`) требует успешного прогона regression gate** на фиксированном RU/EN наборе.
+
+---
+
 ## 5) Формат обновления после каждой сессии агента
 
 Чтобы карта всегда отвечала на вопрос «что сделано», после каждой существенной задачи обновлять:
