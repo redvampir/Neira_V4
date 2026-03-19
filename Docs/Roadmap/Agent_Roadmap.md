@@ -42,7 +42,7 @@
 1. ✅ **Контракты модулей + каталог ошибок** — выполнено (Docs/Contracts/).
 2. ✅ **Транзакционная модель памяти** — выполнено (FHypothesisEvent + EventLog).
 3. ✅ **Explainability/Audit trail** — выполнено (DecisionTrace + EventLog).
-4. ✅ **Regression gate для порогов и drift-контроль** — выполнено (ThresholdRegressionGateTests).
+4. 🔄 **Regression gate для порогов и drift-контроль** — in progress (заявлен `ThresholdRegressionGateTests`, но фактический прогон `make regression-gate` требует дофикса подключения в test runner).
 5. **Privacy/Security baseline (PII/NON_PII + retention/deletion)**.
 6. **SLA-границы C++/Blueprint и профили производительности**.
 7. **Migration path для v0.4+ (ADR + DoD + playbook)**.
