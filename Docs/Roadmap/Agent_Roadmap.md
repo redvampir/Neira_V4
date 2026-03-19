@@ -2,7 +2,7 @@
 
 > Цель: дать агентам и команде единый ориентир «что уже сделано», «что в работе» и «что дальше», чтобы не терять контекст между сессиями.
 
-Дата фиксации: **2026-03-19** (обновлено: DoD v0.3, retrieval по якорям; реализованы v0.1–v0.3)
+Дата фиксации: **2026-03-19** (обновлено: разделён статус v0.3 «частично реализовано» vs «DoD закрыт полностью», добавлен tech-checklist DoD и ссылки на целевые файлы/тесты)
 
 ---
 
@@ -24,7 +24,8 @@
 | Owner-решения для снятия блокеров | ✅ Done (фиксация) | Зафиксированы решения по PII, source-of-truth (через командный ADR-процесс), SLA по железу, рамкам online-learning, RU+EN-заделу. | Перевести решения в политики, схемы и тестируемые правила. |
 | **Реализация v0.1 pipeline** | ✅ Done | FPhraseClassifier, FIntentExtractor, FActionRegistry, FHypothesisStore (.cpp). 35 тестов в NeiraTests. | Запустить тесты в UE Automation Tool; подключить Build.cs. |
 | **Реализация v0.2 морфология** | ✅ Done | FMorphAnalyzer: словарь ~130 слов + суффиксные правила (глаголы/существительные/прилагательные). FHypothesisStore v0.2: ConfirmCount, MinConfirmCount=2. 17 тестов. | Расширить словарь до 1000+ слов; подключить к FIntentExtractor. |
-| **Реализация v0.3 синтаксис** | ✅ Done | FSyntaxParser: Subject→Predicate→Object→Recipient одним проходом. bIsAbilityCheck, bHasNestedClause, bIsNegated. 12 тестов. | Интегрировать с FIntentExtractor (заменить паттерны на фрейм); добавить обработку координации. |
+| **v0.3 реализовано частично** | 🔄 In Progress | В коде есть базовый `FSyntaxParser`, `DecisionTrace`, `EventLog`; есть unit-тесты на синтаксис/trace/event-log. | Закрыть оставшиеся технические пункты DoD: ambiguous-trace, memory pressure degradation, full fail-reason pipeline, threshold regression gate. |
+| **v0.3 DoD выполнен полностью** | 🔄 In Progress | DoD формализован, но закрыт не полностью: часть критериев пока только в требованиях. | Перевести все пункты DoD в код + автопроверки и перевести статус в ✅ Done. |
 | Формальные контракты модулей (schema/API/errors) | 🔄 In Progress | Заголовки модулей содержат контракты в комментариях. Формальных JSON Schema ещё нет. | JSON Schema v1, versioning policy, error catalog, negative tests для каждого шага pipeline. |
 | Память и транзакционность | 🔄 In Progress | FHypothesisStore: инварианты переходов состояний, счётчик подтверждений. Полная транзакционная модель ещё не описана. | Формальная модель write-path, rollback/replay сценарии, тесты на отсутствие partial state. |
 | Explainability и аудит | 🔄 In Progress | Зафиксирована необходимость trace-id, decision trace и forensic dump. | Единый trace-формат + экспортируемый forensic-режим + регрессионные проверки разбора причин. |
@@ -59,6 +60,20 @@
 
 ---
 
+## 4.1) Технический checklist закрытия DoD v0.3
+
+Статус на **2026-03-19**: 3/7 пунктов закрыты, 4/7 открыты.
+
+- [x] Базовый `FSyntaxParser` + unit-тесты (`Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
+- [x] `DecisionTrace` в intent-пайплайне + тесты (`Source/NeiraCore/Public/FIntentExtractor.h`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/IntentExtractorTests.cpp`).
+- [x] `EventLog` переходов гипотез + тесты (`Source/NeiraCore/Public/FHypothesisStore.h`, `Source/NeiraCore/Private/FHypothesisStore.cpp`, `Source/NeiraTests/Private/HypothesisStoreTests.cpp`).
+- [ ] Ambiguous-trace на уровне каждого `AmbiguousToken` (целевые точки: `Source/NeiraCore/Public/FSyntaxParser.h`, `Source/NeiraCore/Private/FSyntaxParser.cpp`, `Source/NeiraTests/Private/SyntaxParserTests.cpp`).
+- [ ] Memory pressure degradation (`Medium/High/Critical`) с тестируемыми гарантиями HOT/WARM/COLD+anchor (целевые точки: новые policy+tests в `Source/NeiraCore/*` и `Source/NeiraTests/*`).
+- [ ] Full fail-reason pipeline от синтаксиса до ответа (целевые точки: `Source/NeiraCore/Public/FActionTypes.h`, `Source/NeiraCore/Public/NeiraTypes.h`, `Source/NeiraCore/Private/FActionRegistry.cpp`, `Source/NeiraCore/Private/FIntentExtractor.cpp`, `Source/NeiraTests/Private/*`).
+- [ ] Threshold regression gate по `topic_change_threshold` и confidence thresholds на фиксированном RU/EN-наборе (целевые точки: regression harness в `Source/NeiraTests/*`, фиксация в `Docs/Roadmap/Agent_Roadmap.md`).
+
+---
+
 ## 5) Формат обновления после каждой сессии агента
 
 Чтобы карта всегда отвечала на вопрос «что сделано», после каждой существенной задачи обновлять:
@@ -84,7 +99,8 @@
 - ✅ Зафиксирован список критических архитектурных пробелов с приоритетом закрытия.
 - ✅ Зафиксированы ключевые owner-решения, снимающие часть стратегических блокеров.
 - ✅ Добавлен минимальный контур координации агентов: playbook, handoff log, ADR-реестр, knowledge index.
-- 🔄 Не хватает формальных контрактов, тестируемой транзакционности памяти и единого audit-формата — это ближайшая рабочая зона.
+- 🔄 v0.3 зафиксирована как частично реализованная: база синтаксиса/trace/event-log есть, но полный DoD ещё не закрыт технически.
+- 🔄 Не хватает формальных контрактов, memory pressure degradation, full fail-reason pipeline и threshold regression gate — это ближайшая рабочая зона.
 
 ---
 
