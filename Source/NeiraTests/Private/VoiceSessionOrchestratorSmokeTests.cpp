@@ -38,6 +38,21 @@ struct FMockTextToSpeech final : public ITextToSpeech
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceSmoke_ConfigDefaults,
+    "Neira.Voice.Smoke.ConfigDefaults",
+    NEIRA_TEST_FLAGS)
+bool FVoiceSmoke_ConfigDefaults::RunTest(const FString& Parameters)
+{
+    (void)Parameters;
+    const FVoiceConfig Config;
+    TestFalse(TEXT("voice_enabled по умолчанию должен быть false"), Config.bVoiceEnabled);
+    TestEqual(TEXT("voice_locale по умолчанию должен быть ru-RU"),
+              Config.VoiceLocale,
+              FString(TEXT("ru-RU")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FVoiceSmoke_NormalVoicePass,
     "Neira.Voice.Smoke.NormalVoicePass",
     NEIRA_TEST_FLAGS)

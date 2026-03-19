@@ -14,7 +14,7 @@ using FTextPipelineHandler = TFunction<FString(const FString&)>;
  *   (Intent/Action выполняются внутри TextHandler как шаги текстового pipeline).
  * - На сбоях возвращается DiagnosticCode + fallback в текст.
  */
-struct NEIRACORE_API FVoiceSessionOrchestrator : public IVoiceGateway
+struct NEIRACORE_API FVoiceSessionOrchestrator : public IVoiceSessionOrchestrator
 {
     FVoiceSessionOrchestrator(const FVoiceFeatureFlags& InFlags,
                               FTextPipelineHandler      InTextHandler,
