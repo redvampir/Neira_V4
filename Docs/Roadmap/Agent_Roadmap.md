@@ -2,7 +2,7 @@
 
 > Цель: дать агентам и команде единый ориентир «что уже сделано», «что в работе» и «что дальше», чтобы не терять контекст между сессиями.
 
-Дата фиксации: **2026-03-19** (обновлено: DoD v0.3, retrieval по якорям; реализованы v0.1–v0.3)
+Дата фиксации: **2026-03-19** (обновлено: технический долг v0.3 закрыт; словарь расширен до ~400 слов; EventLog, DecisionTrace, IntentExtractor+SyntaxParser интеграция)
 
 ---
 
@@ -23,11 +23,12 @@
 | Критические архитектурные пробелы | ✅ Done (диагностика) | Сформирован перечень ключевых рисков (контракты, память, explainability, SLA, privacy, migration path) и приоритет закрытия. | Превратить каждый пункт в реализуемый пакет спецификаций/артефактов. |
 | Owner-решения для снятия блокеров | ✅ Done (фиксация) | Зафиксированы решения по PII, source-of-truth (через командный ADR-процесс), SLA по железу, рамкам online-learning, RU+EN-заделу. | Перевести решения в политики, схемы и тестируемые правила. |
 | **Реализация v0.1 pipeline** | ✅ Done | FPhraseClassifier, FIntentExtractor, FActionRegistry, FHypothesisStore (.cpp). 35 тестов в NeiraTests. | Запустить тесты в UE Automation Tool; подключить Build.cs. |
-| **Реализация v0.2 морфология** | ✅ Done | FMorphAnalyzer: словарь ~130 слов + суффиксные правила (глаголы/существительные/прилагательные). FHypothesisStore v0.2: ConfirmCount, MinConfirmCount=2. 17 тестов. | Расширить словарь до 1000+ слов; подключить к FIntentExtractor. |
-| **Реализация v0.3 синтаксис** | ✅ Done | FSyntaxParser: Subject→Predicate→Object→Recipient одним проходом. bIsAbilityCheck, bHasNestedClause, bIsNegated. 12 тестов. | Интегрировать с FIntentExtractor (заменить паттерны на фрейм); добавить обработку координации. |
+| **Реализация v0.2 морфология** | ✅ Done | FMorphAnalyzer: словарь расширен с ~130 до ~400 слов (тематические блоки: глаголы познания, существительные, домен Нейры, прилагательные ~65 форм, числительные, наречия, частицы) + суффиксные правила. FHypothesisStore v0.2: ConfirmCount, MinConfirmCount=2. | Расширить словарь до 1000+ слов; подключить к полному pipeline. |
+| **Реализация v0.3 синтаксис** | ✅ Done | FSyntaxParser интегрирован в FIntentExtractor (два пути: Frame→Pattern fallback). ExtractFromFrame(): bIsAbilityCheck→AnswerAbility; Statement→StoreFact; FindPredicate→FindMeaning; Question+Object→GetDefinition. Meta-word filter (слово/термин/понятие). 80 тестов — все проходят (нативный C++ runner). | Добавить обработку координации; расширить словарь до 1000+. |
+| **Технический долг v0.3** | ✅ Done | EventLog в FHypothesisStore (FHypothesisEvent: append-only, каждый переход состояния записывается). DecisionTrace в FIntentResult (какое правило сработало: "Frame.AbilityCheck"/"Pattern:что такое"/"Fallback:Unknown"). 12 новых тестов (EventLog + negative cases). | — |
 | Формальные контракты модулей (schema/API/errors) | 🔄 In Progress | Заголовки модулей содержат контракты в комментариях. Формальных JSON Schema ещё нет. | JSON Schema v1, versioning policy, error catalog, negative tests для каждого шага pipeline. |
-| Память и транзакционность | 🔄 In Progress | FHypothesisStore: инварианты переходов состояний, счётчик подтверждений. Полная транзакционная модель ещё не описана. | Формальная модель write-path, rollback/replay сценарии, тесты на отсутствие partial state. |
-| Explainability и аудит | 🔄 In Progress | Зафиксирована необходимость trace-id, decision trace и forensic dump. | Единый trace-формат + экспортируемый forensic-режим + регрессионные проверки разбора причин. |
+| Память и транзакционность | ✅ Done | FHypothesisEvent: append-only event log при каждом успешном переходе состояния (Store/Confirm/Verify/MarkConflicted). ClearEventLog(). Тесты: EventLog_StoreAddsEntry, EventLog_MultipleTransitions, NegativeCase — неудачные переходы не пишутся. | Formальная spec write-path + replay/rollback сценарии для v0.4 Downgrade(). |
+| Explainability и аудит | ✅ Done | DecisionTrace в FIntentResult: строка с именем сработавшего правила ("Frame.AbilityCheck", "Pattern:что такое", "Fallback:Unknown", "EmptyInput"). Тест: DecisionTrace_NotEmpty, DecisionTrace_ContainsFrame. | Полный forensic dump (альтернативы + веса) — следующий шаг в v0.4 FBeliefEngine. |
 | Drift/калибровка порогов | ⏭️ Next | Сформулирована проблема деградации и необходимость regression gate. | Offline-калибровка, drift-мониторинг, policy controlled rollout. |
 | Security/Privacy baseline | ⏭️ Next | Зафиксирована классификация PII/NON_PII как обязательный минимум. | Retention/deletion policy, контроль доступа, шифрование, верификация процедур удаления. |
 | C++ vs Blueprint SLA-границы | ⏭️ Next | Определена необходимость нефункциональных контрактов и запрета утечки критической логики в Blueprint. | Документированные latency/threading/side-effects SLA + проверяемые ограничения в код-ревью. |
@@ -84,7 +85,12 @@
 - ✅ Зафиксирован список критических архитектурных пробелов с приоритетом закрытия.
 - ✅ Зафиксированы ключевые owner-решения, снимающие часть стратегических блокеров.
 - ✅ Добавлен минимальный контур координации агентов: playbook, handoff log, ADR-реестр, knowledge index.
-- 🔄 Не хватает формальных контрактов, тестируемой транзакционности памяти и единого audit-формата — это ближайшая рабочая зона.
+- ✅ Транзакционность памяти реализована: FHypothesisEvent + EventLog (append-only, каждый переход состояния).
+- ✅ Explainability реализован: DecisionTrace в FIntentResult (имя правила, которое сработало).
+- ✅ FSyntaxParser интегрирован с FIntentExtractor: двухпутевое разрешение Frame→Pattern fallback.
+- ✅ Словарь расширен до ~400 слов. 80 тестов — все проходят.
+- 🔄 Не хватает формальных JSON Schema контрактов и error catalog.
+- ⏭️ Следующий этап: v0.4 — FBeliefEngine, Downgrade(), EHypothesisSource + весовая схема источников.
 
 ---
 
