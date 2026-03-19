@@ -108,12 +108,15 @@ EPhraseType FPhraseClassifier::Classify(const FString& Phrase) const
 
     const FString Lower = Trimmed.ToLower();
 
-    // 1. Вопрос: явный '?' или вопросительное слово
-    if (Lower.EndsWith(TEXT("?")) || ContainsAny(Lower, QuestionMarkers))
+    // 1. Вопрос: явный '?' или вопросительное слово.
+    //    Исключение: если фраза начинается с маркера просьбы («скажи мне что такое X»),
+    //    то приоритет отдаётся просьбе, а не вопросу.
+    const bool bStartsWithRequest = StartsWithAny(Lower, RequestStartMarkers);
+    if (Lower.EndsWith(TEXT("?")) || (!bStartsWithRequest && ContainsAny(Lower, QuestionMarkers)))
         return EPhraseType::Question;
 
     // 2. Просьба: «скажи мне», «объясни», «расскажи» в начале
-    if (StartsWithAny(Lower, RequestStartMarkers))
+    if (bStartsWithRequest)
         return EPhraseType::Request;
 
     // 3. Команда: глагол повелительного наклонения в начале

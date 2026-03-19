@@ -23,6 +23,25 @@ struct NEIRACORE_API FHypothesis
 };
 
 /**
+ * FHypothesisEvent — запись в append-only журнале переходов состояний.
+ *
+ * Пишется только при успешном переходе. Неудачные вызовы (Verify из Pending,
+ * Confirm из Conflicted и т.д.) в лог не попадают.
+ *
+ * v0.3: введён для поддержки транзакционной модели памяти.
+ * В v0.4 лог будет использоваться для replay при переходах вниз
+ * (Verified → Conflicted → Pending).
+ */
+struct NEIRACORE_API FHypothesisEvent
+{
+    int32           HypothesisID = -1;
+    EKnowledgeState FromState    = EKnowledgeState::Pending;
+    EKnowledgeState ToState      = EKnowledgeState::Pending;
+    FString         MethodName;  // "Store" | "Confirm" | "Verify" | "MarkConflicted"
+    FString         Reason;
+};
+
+/**
  * FHypothesisStore
  *
  * Хранилище гипотез и знаний агента.
@@ -36,7 +55,10 @@ struct NEIRACORE_API FHypothesis
  * v0.2: правило устойчивого перехода — MinConfirmCount = 2.
  * Гипотеза становится VerifiedKnowledge только после ≥2 подтверждений.
  *
- * Реализация: v0.2
+ * v0.3: добавлен append-only EventLog.
+ * Каждый успешный переход состояния записывается в EventLog.
+ *
+ * Реализация: v0.3
  */
 struct NEIRACORE_API FHypothesisStore
 {
@@ -80,6 +102,17 @@ struct NEIRACORE_API FHypothesisStore
 
     int32 Count() const;
 
+    // -----------------------------------------------------------------------
+    // Event log API (v0.3)
+    // -----------------------------------------------------------------------
+
+    /** Полный append-only журнал успешных переходов состояний. */
+    const TArray<FHypothesisEvent>& GetEventLog() const;
+
+    /** Очистить журнал. Используется в тестах и при сбросе хранилища. */
+    void ClearEventLog();
+
 private:
-    TArray<FHypothesis> Hypotheses;
+    TArray<FHypothesis>      Hypotheses;
+    TArray<FHypothesisEvent> EventLog;
 };

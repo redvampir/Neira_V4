@@ -164,4 +164,52 @@ bool FActionRegistry_Execute_NotSupported_HasDiagnostic::RunTest(const FString& 
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Negative тесты: граничные значения Confidence
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FActionRegistry_Execute_NegativeConfidence,
+    "Neira.ActionRegistry.Execute_NegativeConfidence_ReturnsLowConfidence",
+    NEIRA_TEST_FLAGS)
+bool FActionRegistry_Execute_NegativeConfidence::RunTest(const FString& Parameters)
+{
+    FActionRegistry Registry;
+    Registry.Register(EActionID::GetDefinition, [](const FActionRequest&) {
+        return FActionResult{ true, TEXT("ok"), EActionFailReason::None, TEXT("") };
+    });
+
+    FActionRequest Req;
+    Req.ActionID   = EActionID::GetDefinition;
+    Req.Confidence = -0.1f;
+
+    FActionResult Result = Registry.Execute(Req);
+    TestFalse(TEXT("Confidence < 0 → bSuccess = false"), Result.bSuccess);
+    TestEqual(TEXT("Confidence < 0 → FailReason = LowConfidence"),
+        Result.FailReason, EActionFailReason::LowConfidence);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FActionRegistry_Execute_ZeroConfidence,
+    "Neira.ActionRegistry.Execute_ZeroConfidence_ReturnsLowConfidence",
+    NEIRA_TEST_FLAGS)
+bool FActionRegistry_Execute_ZeroConfidence::RunTest(const FString& Parameters)
+{
+    FActionRegistry Registry;
+    Registry.Register(EActionID::GetDefinition, [](const FActionRequest&) {
+        return FActionResult{ true, TEXT("ok"), EActionFailReason::None, TEXT("") };
+    });
+
+    FActionRequest Req;
+    Req.ActionID   = EActionID::GetDefinition;
+    Req.Confidence = 0.0f;
+
+    FActionResult Result = Registry.Execute(Req);
+    TestFalse(TEXT("Confidence == 0 → bSuccess = false"), Result.bSuccess);
+    TestEqual(TEXT("Confidence == 0 → FailReason = LowConfidence"),
+        Result.FailReason, EActionFailReason::LowConfidence);
+    return true;
+}
+
 #undef NEIRA_TEST_FLAGS
