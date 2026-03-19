@@ -186,10 +186,20 @@ public:
     void Add(T&& v)      { this->push_back(std::move(v)); }
     bool Contains(const T& v) const { return std::find(this->begin(), this->end(), v) != this->end(); }
     T* FindByPredicate(std::function<bool(const T&)> Pred) {
-        for (auto& e : *this) if (Pred(e)) return &e; return nullptr;
+        for (auto& e : *this) {
+            if (Pred(e)) {
+                return &e;
+            }
+        }
+        return nullptr;
     }
     const T* FindByPredicate(std::function<bool(const T&)> Pred) const {
-        for (const auto& e : *this) if (Pred(e)) return &e; return nullptr;
+        for (const auto& e : *this) {
+            if (Pred(e)) {
+                return &e;
+            }
+        }
+        return nullptr;
     }
     void Reset() { this->clear(); }
     void Reserve(int32 Count) { this->reserve((size_t)Count); }
