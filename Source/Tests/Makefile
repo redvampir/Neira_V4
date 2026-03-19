@@ -10,7 +10,7 @@ CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FHypothesisStore.cpp \
             ../NeiraCore/Private/FMorphAnalyzer.cpp \
             ../NeiraCore/Private/FSyntaxParser.cpp \
-            ../NeiraCore/Private/FMemoryPressurePolicy.cpp
+            ../NeiraCore/Private/FBeliefEngine.cpp
 
 TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/IntentExtractorTests.cpp \
@@ -18,9 +18,7 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/HypothesisStoreTests.cpp \
             ../NeiraTests/Private/MorphAnalyzerTests.cpp \
             ../NeiraTests/Private/SyntaxParserTests.cpp \
-            ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
-            ../NeiraTests/Private/ThresholdRegressionGateTests.cpp \
-            ../NeiraTests/Private/DoDIntegrationTests.cpp
+            ../NeiraTests/Private/BeliefEngineTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 

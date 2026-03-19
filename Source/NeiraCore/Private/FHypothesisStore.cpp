@@ -1,4 +1,10 @@
 // FHypothesisStore.cpp
+// v0.4 — переходы вниз (Downgrade), поиск по утверждению (FindByClaim).
+//
+// Изменения относительно v0.3:
+//   - Downgrade(): VerifiedKnowledge→Conflicted, Confirmed→Pending (ConfirmCount=0).
+//   - FindByClaim(): поиск первой гипотезы с совпадающим Claim, возвращает ID или -1.
+//
 // v0.3 — транзакционный журнал переходов состояний (EventLog).
 //
 // Изменения относительно v0.2:
@@ -124,6 +130,53 @@ bool FHypothesisStore::MarkConflicted(int32 HypothesisID, const FString& Reason)
     EventLog.Add(MoveTemp(Ev));
 
     return true;
+}
+
+bool FHypothesisStore::Downgrade(int32 HypothesisID, const FString& Reason)
+{
+    if (!Hypotheses.IsValidIndex(HypothesisID))
+        return false;
+
+    FHypothesis& H = Hypotheses[HypothesisID];
+    EKnowledgeState PrevState = H.State;
+    EKnowledgeState NextState;
+
+    if (H.State == EKnowledgeState::VerifiedKnowledge)
+    {
+        NextState = EKnowledgeState::Conflicted;
+    }
+    else if (H.State == EKnowledgeState::Confirmed)
+    {
+        NextState        = EKnowledgeState::Pending;
+        H.ConfirmCount   = 0;
+    }
+    else
+    {
+        return false;  // Pending, Conflicted, Deprecated — нельзя понизить
+    }
+
+    H.State  = NextState;
+    H.Reason = Reason;
+
+    FHypothesisEvent Ev;
+    Ev.HypothesisID = HypothesisID;
+    Ev.FromState    = PrevState;
+    Ev.ToState      = NextState;
+    Ev.MethodName   = TEXT("Downgrade");
+    Ev.Reason       = Reason;
+    EventLog.Add(MoveTemp(Ev));
+
+    return true;
+}
+
+int32 FHypothesisStore::FindByClaim(const FString& Claim) const
+{
+    for (int32 i = 0; i < Hypotheses.Num(); ++i)
+    {
+        if (Hypotheses[i].Claim == Claim)
+            return i;
+    }
+    return -1;
 }
 
 bool FHypothesisStore::IsEligibleForVerification(int32 HypothesisID) const
