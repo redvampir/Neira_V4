@@ -18,9 +18,9 @@
 | `Docs/Agents/Agent_Playbook.md` | Стандартный workflow агента | Перед стартом любой задачи | Team | По мере улучшения процесса |
 | `Docs/Roadmap/Agent_Handoff_Log.md` | Передача контекста между сессиями | Перед началом и после завершения сессии | Team | После каждой сессии |
 
-## Contracts (зона роста)
+## Contracts
 
 | Документ | Назначение | Когда читать | Владелец | Частота обновления |
 |---|---|---|---|---|
-| `TBD: Contracts/API` | Формальные контракты и schema version | Перед изменениями интерфейсов | TBD | TBD |
-| `TBD: Error Catalog` | Коды ошибок + recovery | При обработке ошибок и тестах | TBD | TBD |
+| `Docs/Contracts/Module_Contracts_v1.md` | Формальные контракты (поля, инварианты, предусловия) для FMorphResult, FIntentResult, FActionRequest/Result, FHypothesis, FHypothesisEvent, FBeliefDecision | Перед изменениями любого из этих типов | Team | При изменении интерфейсов (schema_version++) |
+| `Docs/Contracts/Error_Catalog.md` | Коды ошибок EActionFailReason, EMemoryPolicyDegradationReason, EBeliefAction + матрица recovery + формат DiagnosticNote | При обработке ошибок, написании тестов, доработке генератора ответов | Team | При добавлении новых кодов |

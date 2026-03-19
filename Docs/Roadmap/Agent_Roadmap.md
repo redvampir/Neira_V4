@@ -2,7 +2,7 @@
 
 > Цель: дать агентам и команде единый ориентир «что уже сделано», «что в работе» и «что дальше», чтобы не терять контекст между сессиями.
 
-Дата фиксации: **2026-03-19** (обновлено: технический долг v0.3 закрыт; словарь расширен до ~400 слов; EventLog, DecisionTrace, IntentExtractor+SyntaxParser интеграция)
+Дата фиксации: **2026-03-19** (обновлено: v0.4 закрыт — FBeliefEngine, Downgrade(), EHypothesisSource; контракты модулей v1 + error catalog; словарь расширен до 1000+ форм)
 
 ---
 
@@ -26,8 +26,9 @@
 | **Реализация v0.2 морфология** | ✅ Done | FMorphAnalyzer: словарь расширен с ~130 до ~400 слов (тематические блоки: глаголы познания, существительные, домен Нейры, прилагательные ~65 форм, числительные, наречия, частицы) + суффиксные правила. FHypothesisStore v0.2: ConfirmCount, MinConfirmCount=2. | Расширить словарь до 1000+ слов; подключить к полному pipeline. |
 | **Реализация v0.3 синтаксис** | ✅ Done | FSyntaxParser интегрирован в FIntentExtractor (два пути: Frame→Pattern fallback). ExtractFromFrame(): bIsAbilityCheck→AnswerAbility; Statement→StoreFact; FindPredicate→FindMeaning; Question+Object→GetDefinition. Meta-word filter (слово/термин/понятие). 80 тестов — все проходят (нативный C++ runner). | Добавить обработку координации; расширить словарь до 1000+. |
 | **Технический долг v0.3** | ✅ Done | EventLog в FHypothesisStore (FHypothesisEvent: append-only, каждый переход состояния записывается). DecisionTrace в FIntentResult (какое правило сработало: "Frame.AbilityCheck"/"Pattern:что такое"/"Fallback:Unknown"). 12 новых тестов (EventLog + negative cases). | — |
-| Формальные контракты модулей (schema/API/errors) | 🔄 In Progress | Заголовки модулей содержат контракты в комментариях. Формальных JSON Schema ещё нет. | JSON Schema v1, versioning policy, error catalog, negative tests для каждого шага pipeline. |
-| Память и транзакционность | ✅ Done | FHypothesisEvent: append-only event log при каждом успешном переходе состояния (Store/Confirm/Verify/MarkConflicted). ClearEventLog(). Тесты: EventLog_StoreAddsEntry, EventLog_MultipleTransitions, NegativeCase — неудачные переходы не пишутся. | Formальная spec write-path + replay/rollback сценарии для v0.4 Downgrade(). |
+| **Реализация v0.4 рассуждения** | ✅ Done | FBeliefEngine: весовая схема источников (DeveloperReview 1.00 … Unknown 0.50), порог 0.30f, Created/Confirmed/Verified/Rejected/NoMatch. EHypothesisSource (5 значений + Unknown). FHypothesisStore::Downgrade() (Verified→Conflicted, Confirmed→Pending+сброс ConfirmCount). FindByClaim(). 7 тестов BeliefEngine + 5 тестов Downgrade. | — |
+| Формальные контракты модулей (schema/API/errors) | ✅ Done (базовый уровень v1) | `Docs/Contracts/Module_Contracts_v1.md` — контракты FMorphResult, FIntentResult, FActionRequest/Result, FHypothesis, FHypothesisEvent, FBeliefDecision; инварианты, диапазоны, предусловия, schema_version. `Docs/Contracts/Error_Catalog.md` — 20 кодов ошибок, матрица recovery, формат DiagnosticNote. | Машинно-читаемый JSON Schema файл — при переходе к v0.5. |
+| Память и транзакционность | ✅ Done | FHypothesisEvent: append-only event log при каждом успешном переходе состояния (Store/Confirm/Verify/MarkConflicted/Downgrade). ClearEventLog(). Тесты: EventLog_StoreAddsEntry, EventLog_MultipleTransitions, NegativeCase — неудачные переходы не пишутся. | — |
 | Explainability и аудит | ✅ Done | DecisionTrace в FIntentResult: строка с именем сработавшего правила ("Frame.AbilityCheck", "Pattern:что такое", "Fallback:Unknown", "EmptyInput"). Тест: DecisionTrace_NotEmpty, DecisionTrace_ContainsFrame. | Полный forensic dump (альтернативы + веса) — следующий шаг в v0.4 FBeliefEngine. |
 | Drift/калибровка порогов | ⏭️ Next | Сформулирована проблема деградации и необходимость regression gate. | Offline-калибровка, drift-мониторинг, policy controlled rollout. |
 | Security/Privacy baseline | ⏭️ Next | Зафиксирована классификация PII/NON_PII как обязательный минимум. | Retention/deletion policy, контроль доступа, шифрование, верификация процедур удаления. |
@@ -38,13 +39,13 @@
 
 ## 3) Приоритетный маршрут (исполняемая очередь)
 
-1. **Контракты модулей + каталог ошибок** (база для параллельной разработки).
-2. **Транзакционная модель памяти** (устранение риска тихой порчи знаний).
-3. **Explainability/Audit trail** (разбор ошибок и доверие к выводам).
-4. **Regression gate для порогов и drift-контроль**.
+1. ✅ **Контракты модулей + каталог ошибок** — выполнено (Docs/Contracts/).
+2. ✅ **Транзакционная модель памяти** — выполнено (FHypothesisEvent + EventLog).
+3. ✅ **Explainability/Audit trail** — выполнено (DecisionTrace + EventLog).
+4. ✅ **Regression gate для порогов и drift-контроль** — выполнено (ThresholdRegressionGateTests).
 5. **Privacy/Security baseline (PII/NON_PII + retention/deletion)**.
 6. **SLA-границы C++/Blueprint и профили производительности**.
-7. **Migration path для v0.3+ (ADR + DoD + playbook)**.
+7. **Migration path для v0.4+ (ADR + DoD + playbook)**.
 
 ---
 
@@ -100,7 +101,7 @@
 
 ---
 
-## 6) Что считать «сделано» уже сейчас (снимок на 2026-03-19, обновлено)
+## 6) Что считать «сделано» уже сейчас (снимок на 2026-03-19, финал сессии)
 
 - ✅ Зафиксирован архитектурный каркас, scope и этапность v0.1–v0.5.
 - ✅ Зафиксирован список критических архитектурных пробелов с приоритетом закрытия.
@@ -109,9 +110,10 @@
 - ✅ Транзакционность памяти реализована: FHypothesisEvent + EventLog (append-only, каждый переход состояния).
 - ✅ Explainability реализован: DecisionTrace в FIntentResult (имя правила, которое сработало).
 - ✅ FSyntaxParser интегрирован с FIntentExtractor: двухпутевое разрешение Frame→Pattern fallback.
-- ✅ Словарь расширен до ~400 слов. 80 тестов — все проходят.
-- 🔄 Не хватает формальных JSON Schema контрактов и error catalog.
-- ⏭️ Следующий этап: v0.4 — FBeliefEngine, Downgrade(), EHypothesisSource + весовая схема источников.
+- ✅ v0.4 закрыт: FBeliefEngine (7 тестов), EHypothesisSource (весовая схема), Downgrade() (5 тестов), FindByClaim().
+- ✅ Формальные контракты модулей v1: Docs/Contracts/Module_Contracts_v1.md + Error_Catalog.md.
+- ✅ Словарь расширен до 1000+ форм. 108 тестов — все проходят.
+- ⏭️ Следующий этап: Privacy/Security baseline (PII/NON_PII + retention) → SLA C++/Blueprint → Migration playbook v0.4+.
 
 ---
 
