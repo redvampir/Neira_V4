@@ -76,8 +76,12 @@ struct NEIRACORE_API FVoiceTurnResult
     FString DiagnosticNote;
 };
 
-struct NEIRACORE_API IVoiceSessionOrchestrator
+struct NEIRACORE_API IVoiceGateway
 {
-    virtual ~IVoiceSessionOrchestrator() = default;
+    virtual ~IVoiceGateway() = default;
+    virtual void SetVoiceEnabled(bool bEnabled) = 0;
+    virtual bool IsVoiceEnabled() const = 0;
     virtual FVoiceTurnResult RunTurn(const FVoiceTurnRequest& Request) = 0;
 };
+
+using IVoiceSessionOrchestrator = IVoiceGateway;

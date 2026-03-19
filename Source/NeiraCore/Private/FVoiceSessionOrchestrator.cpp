@@ -11,6 +11,16 @@ FVoiceSessionOrchestrator::FVoiceSessionOrchestrator(const FVoiceFeatureFlags& I
 {
 }
 
+void FVoiceSessionOrchestrator::SetVoiceEnabled(bool bEnabled)
+{
+    Flags.bVoiceEnabled = bEnabled;
+}
+
+bool FVoiceSessionOrchestrator::IsVoiceEnabled() const
+{
+    return Flags.bVoiceEnabled;
+}
+
 FVoiceTurnResult FVoiceSessionOrchestrator::RunTurn(const FVoiceTurnRequest& Request)
 {
     FVoiceTurnResult Result;
