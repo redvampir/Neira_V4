@@ -5,10 +5,17 @@
 //   StoreFact   → создать гипотезу с AppliedConfidence = Confidence * Weight.
 //                 Если AppliedConfidence < 0.30 → Rejected.
 //   Запросные интенты (GetDefinition, GetWordFact, FindMeaning, AnswerAbility)
-//               → найти гипотезу по EntityTarget, Confirm или Verify.
+//               → при AppliedConfidence >= 0.50 найти гипотезу по EntityTarget,
+//                 затем Confirm или Verify.
 //   Остальные   → NoMatch.
 
 #include "FBeliefEngine.h"
+
+namespace
+{
+constexpr float StoreThreshold = 0.30f;
+constexpr float ConfirmThreshold = 0.50f;
+}
 
 float FBeliefEngine::GetSourceWeight(EHypothesisSource Source)
 {
@@ -34,7 +41,7 @@ FBeliefDecision FBeliefEngine::Process(const FIntentResult& Intent,
 
     if (Intent.IntentID == EIntentID::StoreFact)
     {
-        if (AppliedConfidence < 0.30f)
+        if (AppliedConfidence < StoreThreshold)
         {
             Decision.Action = EBeliefAction::Rejected;
             Decision.Reason = TEXT("уверенность после взвешивания ниже порога 0.30");
@@ -58,6 +65,13 @@ FBeliefDecision FBeliefEngine::Process(const FIntentResult& Intent,
         Intent.IntentID == EIntentID::FindMeaning     ||
         Intent.IntentID == EIntentID::AnswerAbility)
     {
+        if (AppliedConfidence < ConfirmThreshold)
+        {
+            Decision.Action = EBeliefAction::Rejected;
+            Decision.Reason = TEXT("уверенность после взвешивания ниже порога 0.50 для подтверждения");
+            return Decision;
+        }
+
         const int32 ID = Store.FindByClaim(Intent.EntityTarget);
         if (ID == -1)
         {
