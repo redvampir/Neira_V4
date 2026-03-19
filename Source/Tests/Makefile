@@ -12,6 +12,7 @@ CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FSyntaxParser.cpp \
             ../NeiraCore/Private/FBeliefEngine.cpp \
             ../NeiraCore/Private/FMemoryPressurePolicy.cpp \
+            ../NeiraCore/Private/FOfflineVoiceAdapters.cpp \
             ../NeiraCore/Private/FVoiceSessionOrchestrator.cpp \
             ../NeiraCore/Private/FResponseGenerator.cpp
 

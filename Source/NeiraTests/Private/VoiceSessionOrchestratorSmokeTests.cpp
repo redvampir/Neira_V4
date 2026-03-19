@@ -1,6 +1,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 
+#include "FOfflineVoiceAdapters.h"
 #include "FVoiceSessionOrchestrator.h"
 
 #define NEIRA_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
@@ -135,6 +136,89 @@ bool FVoiceSmoke_TtsUnavailableFallbackToText::RunTest(const FString& Parameters
               FString(TEXT("text::что такое память")));
     TestFalse(TEXT("TTS output не должен быть активен"), Result.bUsedVoiceOutput);
     TestTrue(TEXT("Диагностика должна содержать причину TTS"), Result.DiagnosticNote.Contains(TEXT("tts unavailable"), false));
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceSmoke_RuntimeTogglePreservesTextPipelineInvariant,
+    "Neira.Voice.Smoke.RuntimeTogglePreservesTextPipelineInvariant",
+    NEIRA_TEST_FLAGS)
+bool FVoiceSmoke_RuntimeTogglePreservesTextPipelineInvariant::RunTest(const FString& Parameters)
+{
+    FMockSpeechToText Asr;
+    Asr.NextResult.Status = EAsrStatus::Success;
+    Asr.NextResult.Transcript = TEXT("voice in");
+
+    FMockTextToSpeech Tts;
+    Tts.NextResult.Status = ETtsStatus::Success;
+
+    FVoiceFeatureFlags Flags; // default: voice disabled
+    FVoiceSessionOrchestrator Orchestrator(
+        Flags,
+        [](const FString& Input) -> FString { return FString(TEXT("text::")) + Input; },
+        &Asr,
+        &Tts);
+
+    FVoiceTurnRequest Request;
+    Request.TextInput = TEXT("typed in");
+    Request.AudioInput = TEXT("pcm-bytes");
+
+    const FVoiceTurnResult VoiceOffResult = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("При voice=false используется текущий текстовый pipeline"),
+              VoiceOffResult.TextResponse,
+              FString(TEXT("text::typed in")));
+    TestFalse(TEXT("При voice=false голосовой вход не используется"), VoiceOffResult.bUsedVoiceInput);
+    TestFalse(TEXT("При voice=false голосовой выход не используется"), VoiceOffResult.bUsedVoiceOutput);
+
+    Orchestrator.SetVoiceEnabled(true);
+    const FVoiceTurnResult VoiceOnResult = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("После runtime-включения используется ASR transcript"),
+              VoiceOnResult.TextResponse,
+              FString(TEXT("text::voice in")));
+    TestTrue(TEXT("После runtime-включения voice input используется"), VoiceOnResult.bUsedVoiceInput);
+    TestTrue(TEXT("После runtime-включения voice output используется"), VoiceOnResult.bUsedVoiceOutput);
+
+    Orchestrator.SetVoiceEnabled(false);
+    const FVoiceTurnResult VoiceOffAgainResult = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("После повторного выключения инвариант текстового pipeline сохраняется"),
+              VoiceOffAgainResult.TextResponse,
+              FString(TEXT("text::typed in")));
+    TestFalse(TEXT("После повторного выключения voice input не используется"), VoiceOffAgainResult.bUsedVoiceInput);
+    TestFalse(TEXT("После повторного выключения voice output не используется"), VoiceOffAgainResult.bUsedVoiceOutput);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceSmoke_OfflineAdaptersProvideDeterministicPath,
+    "Neira.Voice.Smoke.OfflineAdaptersProvideDeterministicPath",
+    NEIRA_TEST_FLAGS)
+bool FVoiceSmoke_OfflineAdaptersProvideDeterministicPath::RunTest(const FString& Parameters)
+{
+    FOfflineSpeechToTextAdapter OfflineAsr;
+    FOfflineTextToSpeechAdapter OfflineTts;
+
+    FVoiceFeatureFlags Flags;
+    Flags.bVoiceEnabled = true;
+
+    FVoiceSessionOrchestrator Orchestrator(
+        Flags,
+        [](const FString& Input) -> FString { return FString(TEXT("text::")) + Input; },
+        &OfflineAsr,
+        &OfflineTts);
+
+    FVoiceTurnRequest Request;
+    Request.AudioInput = TEXT("локальный запрос");
+
+    const FVoiceTurnResult Result = Orchestrator.RunTurn(Request);
+    TestEqual(TEXT("Offline ASR должен отдавать transcript из payload"),
+              Result.TextResponse,
+              FString(TEXT("text::локальный запрос")));
+    TestTrue(TEXT("Offline voice input должен быть использован"), Result.bUsedVoiceInput);
+    TestTrue(TEXT("Offline voice output должен быть использован"), Result.bUsedVoiceOutput);
+    TestTrue(TEXT("Offline TTS должен формировать audio payload"),
+             Result.AudioResponse.Contains(TEXT("offline-audio::"), false));
 
     return true;
 }
