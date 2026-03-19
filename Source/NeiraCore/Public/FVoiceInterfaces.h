@@ -51,10 +51,21 @@ struct NEIRACORE_API ITextToSpeech
     virtual FTextToSpeechResult Synthesize(const FString& Text) = 0;
 };
 
-struct NEIRACORE_API FVoiceFeatureFlags
+/**
+ * Единый runtime-конфиг голосового контура.
+ *
+ * NOTE: Имя полей в конфиг-файлах/консолях:
+ * - voice_enabled (default=false)
+ * - voice_locale  (default=ru-RU)
+ */
+struct NEIRACORE_API FVoiceConfig
 {
     bool bVoiceEnabled = false;
+    FString VoiceLocale = TEXT("ru-RU");
 };
+
+// Backward-compat alias для уже существующих call-site'ов.
+using FVoiceFeatureFlags = FVoiceConfig;
 
 struct NEIRACORE_API FVoiceTurnRequest
 {
@@ -78,12 +89,13 @@ struct NEIRACORE_API FVoiceTurnResult
     FString DiagnosticNote;
 };
 
-struct NEIRACORE_API IVoiceGateway
+struct NEIRACORE_API IVoiceSessionOrchestrator
 {
-    virtual ~IVoiceGateway() = default;
+    virtual ~IVoiceSessionOrchestrator() = default;
     virtual void SetVoiceEnabled(bool bEnabled) = 0;
     virtual bool IsVoiceEnabled() const = 0;
     virtual FVoiceTurnResult RunTurn(const FVoiceTurnRequest& Request) = 0;
 };
 
-using IVoiceSessionOrchestrator = IVoiceGateway;
+// Backward-compat alias для legacy-имени интерфейса.
+using IVoiceGateway = IVoiceSessionOrchestrator;
