@@ -23,6 +23,8 @@ struct NEIRACORE_API FIntentResult
     FString    EntityTarget;              // "кот", "окно", "текст"
     float      Confidence    = 0.0f;     // [0..1]
     FString    DecisionTrace;            // путь принятия решения
+    EActionFailReason FailReason = EActionFailReason::None; // причина неуспеха pipeline
+    FString    DiagnosticNote;           // диагностическая причина для логов/тестов
 };
 
 /**

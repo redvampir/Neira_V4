@@ -248,6 +248,7 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
         Result.EntityTarget  = Frame.Object;
         Result.Confidence    = 0.85f;
         Result.DecisionTrace = TEXT("Frame.AbilityCheck");
+        Result.FailReason    = EActionFailReason::None;
         return Result;
     }
 
@@ -258,6 +259,7 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
         Result.EntityTarget  = OriginalPhrase.TrimStartAndEnd();
         Result.Confidence    = 0.8f;
         Result.DecisionTrace = TEXT("PhraseType:Statement");
+        Result.FailReason    = EActionFailReason::None;
         return Result;
     }
 
@@ -274,7 +276,9 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
             // но не целевой термин. Передаём управление fallback-паттернам.
             Result.IntentID      = EIntentID::Unknown;
             Result.Confidence    = 0.0f;
-            Result.DecisionTrace = TEXT("");
+            Result.DecisionTrace = TEXT("Frame.PartialParse:MeaningTermMissing");
+            Result.FailReason    = EActionFailReason::PartialParse;
+            Result.DiagnosticNote = TEXT("Найден meta-object для FindMeaning, но целевой термин не извлечён.");
             return Result;
         }
 
@@ -282,6 +286,7 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
         Result.EntityTarget  = Term;
         Result.Confidence    = 0.9f;
         Result.DecisionTrace = TEXT("Frame.Predicate:найти+DefinitionObject+ExtractedTerm");
+        Result.FailReason    = EActionFailReason::None;
         return Result;
     }
 
@@ -292,6 +297,7 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
         Result.EntityTarget  = Frame.Object;
         Result.Confidence    = 0.75f;
         Result.DecisionTrace = TEXT("Frame.Predicate:рассказать/объяснить");
+        Result.FailReason    = EActionFailReason::None;
         return Result;
     }
 
@@ -306,13 +312,20 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
         Result.EntityTarget  = Frame.Object;
         Result.Confidence    = 0.85f;
         Result.DecisionTrace = TEXT("Frame.Question+Object");
+        Result.FailReason    = EActionFailReason::None;
         return Result;
     }
 
     // Фрейм не дал достаточно информации
     Result.IntentID      = EIntentID::Unknown;
     Result.Confidence    = 0.0f;
-    Result.DecisionTrace = TEXT("");
+    Result.DecisionTrace = TEXT("Frame:NoIntent");
+    Result.FailReason    = Frame.IsEmpty()
+        ? EActionFailReason::UnknownIntent
+        : EActionFailReason::PartialParse;
+    Result.DiagnosticNote = Frame.IsEmpty()
+        ? TEXT("FSyntaxParser не извлёк опорные элементы (Predicate/Object).")
+        : TEXT("FSyntaxParser извлёк частичный фрейм, но правил Intent недостаточно.");
     return Result;
 }
 
@@ -334,6 +347,7 @@ FIntentResult FIntentExtractor::ExtractFromPatterns(const FString& Phrase) const
         Result.IntentID      = P.IntentID;
         Result.Confidence    = P.Confidence;
         Result.DecisionTrace = FString::Printf(TEXT("Pattern:%s"), *P.Marker.TrimStartAndEnd());
+        Result.FailReason    = EActionFailReason::None;
 
         if (P.bExtractAfterMarker)
         {
@@ -351,6 +365,8 @@ FIntentResult FIntentExtractor::ExtractFromPatterns(const FString& Phrase) const
     Result.Confidence    = 0.4f;
     Result.EntityTarget  = TEXT("");
     Result.DecisionTrace = TEXT("Fallback:Unknown");
+    Result.FailReason    = EActionFailReason::UnknownIntent;
+    Result.DiagnosticNote = TEXT("Fallback-паттерны не распознали намерение.");
     return Result;
 }
 
@@ -368,6 +384,8 @@ FIntentResult FIntentExtractor::Extract(const FString& Phrase, EPhraseType Phras
         Empty.IntentID      = EIntentID::Unknown;
         Empty.Confidence    = 0.0f;
         Empty.DecisionTrace = TEXT("EmptyInput");
+        Empty.FailReason    = EActionFailReason::EmptyInput;
+        Empty.DiagnosticNote = TEXT("Пустой ввод: intent не может быть извлечён.");
         return Empty;
     }
 
@@ -379,5 +397,20 @@ FIntentResult FIntentExtractor::Extract(const FString& Phrase, EPhraseType Phras
         return FrameResult;
 
     // Путь 2: Fallback на строковые шаблоны
-    return ExtractFromPatterns(Trimmed);
+    FIntentResult PatternResult = ExtractFromPatterns(Trimmed);
+    if (PatternResult.IntentID != EIntentID::Unknown)
+        return PatternResult;
+
+    // Не затираем раннюю диагностику частичного синтаксического разбора.
+    if (FrameResult.FailReason == EActionFailReason::PartialParse)
+    {
+        if (!FrameResult.DecisionTrace.IsEmpty())
+        {
+            FrameResult.DecisionTrace += TEXT(" -> ");
+        }
+        FrameResult.DecisionTrace += PatternResult.DecisionTrace;
+        return FrameResult;
+    }
+
+    return PatternResult;
 }

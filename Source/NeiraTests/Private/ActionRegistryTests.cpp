@@ -209,6 +209,64 @@ bool FActionRegistry_Execute_ZeroConfidence::RunTest(const FString& Parameters)
     TestFalse(TEXT("Confidence == 0 → bSuccess = false"), Result.bSuccess);
     TestEqual(TEXT("Confidence == 0 → FailReason = LowConfidence"),
         Result.FailReason, EActionFailReason::LowConfidence);
+    TestFalse(TEXT("Confidence == 0 → DiagnosticNote не пустой"),
+        Result.DiagnosticNote.IsEmpty());
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FActionRegistry_Execute_HandlerFailure_NormalizesReasonAndDiagnostic,
+    "Neira.ActionRegistry.Execute_HandlerFailure_NormalizesReasonAndDiagnostic",
+    NEIRA_TEST_FLAGS)
+bool FActionRegistry_Execute_HandlerFailure_NormalizesReasonAndDiagnostic::RunTest(const FString& Parameters)
+{
+    FActionRegistry Registry;
+    Registry.Register(EActionID::GetDefinition, [](const FActionRequest&) {
+        FActionResult Res;
+        Res.bSuccess = false;
+        Res.FailReason = EActionFailReason::None; // некорректный контракт обработчика
+        Res.DiagnosticNote = TEXT("");
+        return Res;
+    });
+
+    FActionRequest Req;
+    Req.ActionID   = EActionID::GetDefinition;
+    Req.Confidence = 0.9f;
+
+    FActionResult Result = Registry.Execute(Req);
+    TestFalse(TEXT("Ошибочный ответ обработчика → bSuccess = false"), Result.bSuccess);
+    TestEqual(TEXT("FailReason нормализован в InternalError"),
+        Result.FailReason, EActionFailReason::InternalError);
+    TestFalse(TEXT("DiagnosticNote заполнен при неуспехе"),
+        Result.DiagnosticNote.IsEmpty());
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FActionRegistry_Execute_HandlerFailure_PreservesDiagnosticReason,
+    "Neira.ActionRegistry.Execute_HandlerFailure_PreservesDiagnosticReason",
+    NEIRA_TEST_FLAGS)
+bool FActionRegistry_Execute_HandlerFailure_PreservesDiagnosticReason::RunTest(const FString& Parameters)
+{
+    FActionRegistry Registry;
+    Registry.Register(EActionID::FindMeaning, [](const FActionRequest&) {
+        return FActionResult{
+            false,
+            TEXT(""),
+            EActionFailReason::NotSupported,
+            TEXT("Action handler: внешний провайдер недоступен")
+        };
+    });
+
+    FActionRequest Req;
+    Req.ActionID   = EActionID::FindMeaning;
+    Req.Confidence = 0.95f;
+
+    FActionResult Result = Registry.Execute(Req);
+    TestEqual(TEXT("Оригинальный FailReason не затирается"),
+        Result.FailReason, EActionFailReason::NotSupported);
+    TestTrue(TEXT("Оригинальная диагностика не затирается"),
+        Result.DiagnosticNote.Contains(TEXT("внешний провайдер недоступен")));
     return true;
 }
 
