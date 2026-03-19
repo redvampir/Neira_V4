@@ -18,11 +18,12 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/HypothesisStoreTests.cpp \
             ../NeiraTests/Private/MorphAnalyzerTests.cpp \
             ../NeiraTests/Private/SyntaxParserTests.cpp \
-            ../NeiraTests/Private/MemoryPressurePolicyTests.cpp
+            ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
+            ../NeiraTests/Private/ThresholdRegressionGateTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
-.PHONY: all run clean
+.PHONY: all run regression-gate clean
 
 all: neira_tests
 
@@ -31,6 +32,10 @@ neira_tests: $(ALL_SRC) ue_compat.h test_runner.h
 
 run: neira_tests
 	./neira_tests
+
+regression-gate: neira_tests
+	bash -o pipefail -c "./neira_tests | tee regression_gate.log"
+	grep -q "Neira.RegressionGate" regression_gate.log
 
 clean:
 	rm -f neira_tests *.o
