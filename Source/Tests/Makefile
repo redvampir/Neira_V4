@@ -12,7 +12,8 @@ CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FSyntaxParser.cpp \
             ../NeiraCore/Private/FBeliefEngine.cpp \
             ../NeiraCore/Private/FMemoryPressurePolicy.cpp \
-            ../NeiraCore/Private/FVoiceSessionOrchestrator.cpp
+            ../NeiraCore/Private/FVoiceSessionOrchestrator.cpp \
+            ../NeiraCore/Private/FResponseGenerator.cpp
 
 TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/IntentExtractorTests.cpp \
@@ -25,7 +26,8 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/ThresholdRegressionGateTests.cpp \
             ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
             ../NeiraTests/Private/DoDIntegrationTests.cpp \
-            ../NeiraTests/Private/VoiceSessionOrchestratorSmokeTests.cpp
+            ../NeiraTests/Private/VoiceSessionOrchestratorSmokeTests.cpp \
+            ../NeiraTests/Private/ResponseGeneratorTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
