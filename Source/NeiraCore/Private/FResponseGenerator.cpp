@@ -36,17 +36,34 @@ FString InitiativeLine(EResponseInitiative Initiative)
         return TEXT("Инициатива: низкая.");
     }
 }
+
+FString AddressStyleLine(EResponseAddressStyle AddressStyle)
+{
+    switch (AddressStyle)
+    {
+    case EResponseAddressStyle::NeutralYou:
+        return TEXT("Обращение: нейтральное, на «вы».");
+    case EResponseAddressStyle::FormalYou:
+        return TEXT("Обращение: формальное, на «вы».");
+    case EResponseAddressStyle::FriendlyYou:
+        return TEXT("Обращение: дружелюбное, на «ты».");
+    default:
+        return TEXT("Обращение: нейтральное, на «вы».");
+    }
+}
 }
 
 FResponsePersonalityProfile FResponsePersonalityProfile::MakeV1(EResponseTone InTone,
                                                                  EResponseLength InLength,
-                                                                 EResponseInitiative InInitiative)
+                                                                 EResponseInitiative InInitiative,
+                                                                 EResponseAddressStyle InAddressStyle)
 {
     FResponsePersonalityProfile Profile;
     Profile.ProfileID = TEXT("personality_profile_v1");
     Profile.Tone = InTone;
     Profile.Length = InLength;
     Profile.Initiative = InInitiative;
+    Profile.AddressStyle = InAddressStyle;
     Profile.bForbidHallucination = true;
     Profile.bRequireExplicitUncertainty = true;
     return Profile;
@@ -58,25 +75,27 @@ FResponseGenerationOutput FResponseGenerator::Generate(const FResponseGeneration
     FResponseGenerationOutput Out;
     Out.FormatID = BuildFormatID(Input, Profile);
 
-    const FString SemanticCore = NormalizeSemanticCore(Input.SemanticCore);
+    const FString SemanticCore = NormalizeSemanticCore(Input.SemanticDecision.SemanticCore);
 
     TArray<FString> Lines;
-    Lines.Add(FString::Printf(TEXT("[profile=%s; tone=%s; len=%s; initiative=%s; format=%s]"),
+    Lines.Add(FString::Printf(TEXT("[profile=%s; tone=%s; len=%s; initiative=%s; address=%s; format=%s]"),
                               *Profile.ProfileID,
                               *ToString(Profile.Tone),
                               *ToString(Profile.Length),
                               *ToString(Profile.Initiative),
+                              *ToString(Profile.AddressStyle),
                               *Out.FormatID));
 
     Lines.Add(ToneLead(Profile.Tone));
+    Lines.Add(AddressStyleLine(Profile.AddressStyle));
     Lines.Add(InitiativeLine(Profile.Initiative));
-    Lines.Add(BuildIntentBlock(Input.IntentID, SemanticCore));
+    Lines.Add(BuildIntentBlock(Input.SemanticDecision.IntentID, SemanticCore));
 
-    if (Input.bHasUncertainty && Profile.bRequireExplicitUncertainty)
+    if (Input.SemanticDecision.bHasUncertainty && Profile.bRequireExplicitUncertainty)
     {
-        const FString Why = Input.UncertaintyReason.TrimStartAndEnd().IsEmpty()
+        const FString Why = Input.SemanticDecision.UncertaintyReason.TrimStartAndEnd().IsEmpty()
                                 ? TEXT("часть данных отсутствует")
-                                : Input.UncertaintyReason.TrimStartAndEnd();
+                                : Input.SemanticDecision.UncertaintyReason.TrimStartAndEnd();
         Lines.Add(FString::Printf(TEXT("Неопределённость: %s."), *Why));
     }
 
@@ -104,12 +123,13 @@ FResponseGenerationOutput FResponseGenerator::Generate(const FResponseGeneration
 FString FResponseGenerator::BuildFormatID(const FResponseGenerationInput& Input,
                                           const FResponsePersonalityProfile& Profile)
 {
-    return FString::Printf(TEXT("v1.intent_%d.ctx_%s.tone_%s.len_%s.init_%s"),
-                           static_cast<int32>(Input.IntentID),
+    return FString::Printf(TEXT("v1.intent_%d.ctx_%s.tone_%s.len_%s.init_%s.addr_%s"),
+                           static_cast<int32>(Input.SemanticDecision.IntentID),
                            *NormalizeContextKey(Input.ContextKey),
                            *ToString(Profile.Tone),
                            *ToString(Profile.Length),
-                           *ToString(Profile.Initiative));
+                           *ToString(Profile.Initiative),
+                           *ToString(Profile.AddressStyle));
 }
 
 FString FResponseGenerator::BuildIntentBlock(EIntentID IntentID, const FString& SemanticCore)
@@ -158,5 +178,16 @@ FString FResponseGenerator::ToString(EResponseInitiative Initiative)
     case EResponseInitiative::Low:    return TEXT("low");
     case EResponseInitiative::Medium: return TEXT("medium");
     default:                          return TEXT("low");
+    }
+}
+
+FString FResponseGenerator::ToString(EResponseAddressStyle AddressStyle)
+{
+    switch (AddressStyle)
+    {
+    case EResponseAddressStyle::NeutralYou: return TEXT("neutral_you");
+    case EResponseAddressStyle::FormalYou:  return TEXT("formal_you");
+    case EResponseAddressStyle::FriendlyYou:return TEXT("friendly_you");
+    default:                                return TEXT("neutral_you");
     }
 }
