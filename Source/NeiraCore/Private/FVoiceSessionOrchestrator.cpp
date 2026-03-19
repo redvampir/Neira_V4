@@ -9,6 +9,17 @@ void SetDiagnostic(FVoiceTurnResult& Result, const FString& Code, const FString&
     Result.DiagnosticCode = Code;
     Result.DiagnosticNote = Note;
 }
+
+FString BuildFallbackResponseWithContext(const FTextPipelineHandler& TextHandler, const FString& FallbackText)
+{
+    if (!TextHandler)
+    {
+        return FallbackText;
+    }
+
+    const FString PipelineResponse = TextHandler(FallbackText);
+    return PipelineResponse.TrimStartAndEnd().IsEmpty() ? FallbackText : PipelineResponse;
+}
 }
 
 FVoiceSessionOrchestrator::FVoiceSessionOrchestrator(const FVoiceFeatureFlags& InFlags,
@@ -64,7 +75,9 @@ FVoiceTurnResult FVoiceSessionOrchestrator::RunTurn(const FVoiceTurnRequest& Req
                       TEXT("Audio payload is too short and treated as interrupted"));
         if (EffectiveText.TrimStartAndEnd().IsEmpty())
         {
-            Result.TextResponse = TEXT("Обрыв аудио. Повторите голосом или введите текст.");
+            Result.TextResponse = BuildFallbackResponseWithContext(
+                TextHandler,
+                TEXT("Обрыв аудио. Повторите голосом или введите текст."));
             return Result;
         }
     }
@@ -94,7 +107,9 @@ FVoiceTurnResult FVoiceSessionOrchestrator::RunTurn(const FVoiceTurnRequest& Req
 
             if (EffectiveText.TrimStartAndEnd().IsEmpty())
             {
-                Result.TextResponse = TEXT("Не удалось распознать речь. Повторите голосом или введите текст.");
+                Result.TextResponse = BuildFallbackResponseWithContext(
+                    TextHandler,
+                    TEXT("Не удалось распознать речь. Повторите голосом или введите текст."));
                 return Result;
             }
         }
@@ -111,7 +126,9 @@ FVoiceTurnResult FVoiceSessionOrchestrator::RunTurn(const FVoiceTurnRequest& Req
         SetDiagnostic(Result,
                       TEXT("FVoiceSessionOrchestrator:VAD_SILENCE"),
                       TEXT("No audio payload and no text input"));
-        Result.TextResponse = TEXT("Тишина на входе. Скажите фразу ещё раз или введите текст.");
+        Result.TextResponse = BuildFallbackResponseWithContext(
+            TextHandler,
+            TEXT("Тишина на входе. Скажите фразу ещё раз или введите текст."));
         return Result;
     }
 
@@ -123,7 +140,9 @@ FVoiceTurnResult FVoiceSessionOrchestrator::RunTurn(const FVoiceTurnRequest& Req
         SetDiagnostic(Result,
                       TEXT("FVoiceSessionOrchestrator:EMPTY_EFFECTIVE_TEXT"),
                       TEXT("Effective text is empty after VAD/ASR processing"));
-        Result.TextResponse = TEXT("Не удалось получить текст запроса. Повторите голосом или введите текст.");
+        Result.TextResponse = BuildFallbackResponseWithContext(
+            TextHandler,
+            TEXT("Не удалось получить текст запроса. Повторите голосом или введите текст."));
         return Result;
     }
 

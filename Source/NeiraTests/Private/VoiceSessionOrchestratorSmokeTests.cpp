@@ -118,6 +118,8 @@ bool FVoiceSmoke_AsrEmptyPromptRepeat::RunTest(const FString& Parameters)
               Result.DiagnosticCode,
               FString(TEXT("FVoiceSessionOrchestrator:ASR_EMPTY_TRANSCRIPT")));
     TestTrue(TEXT("Ответ должен содержать просьбу повторить"), Result.TextResponse.Contains(TEXT("Повторите"), false));
+    TestTrue(TEXT("Edge-case должен проходить через text pipeline для сохранения контекста"),
+             Result.TextResponse.StartsWith(TEXT("text::")));
 
     return true;
 }
@@ -187,6 +189,8 @@ bool FVoiceSmoke_SilenceFallbackWithDiagnosticCode::RunTest(const FString& Param
     TestTrue(TEXT("На тишине нужен prompt repeat"), Result.bShouldPromptRepeat);
     TestTrue(TEXT("На тишине нужен fallback в текст"), Result.bSwitchedToText);
     TestTrue(TEXT("Ответ должен быть текстовым fallback"), Result.TextResponse.Contains(TEXT("Тишина"), false));
+    TestTrue(TEXT("Тишина должна идти через text pipeline для сохранения контекста"),
+             Result.TextResponse.StartsWith(TEXT("text::")));
     return true;
 }
 
@@ -216,6 +220,8 @@ bool FVoiceSmoke_InterruptedAudioFallbackWithDiagnosticCode::RunTest(const FStri
     TestTrue(TEXT("На обрыве нужно просить повтор"), Result.bShouldPromptRepeat);
     TestTrue(TEXT("На обрыве нужен fallback в текст"), Result.bSwitchedToText);
     TestTrue(TEXT("Ответ должен содержать подсказку про обрыв"), Result.TextResponse.Contains(TEXT("Обрыв аудио"), false));
+    TestTrue(TEXT("Обрыв аудио должен идти через text pipeline для сохранения контекста"),
+             Result.TextResponse.StartsWith(TEXT("text::")));
     return true;
 }
 
@@ -249,6 +255,8 @@ bool FVoiceSmoke_AsrTimeoutFallbackWithDiagnosticCode::RunTest(const FString& Pa
     TestTrue(TEXT("На timeout нужен prompt repeat"), Result.bShouldPromptRepeat);
     TestTrue(TEXT("На timeout нужен fallback в текст"), Result.bSwitchedToText);
     TestTrue(TEXT("Ответ должен просить повтор"), Result.TextResponse.Contains(TEXT("Повторите"), false));
+    TestTrue(TEXT("ASR timeout должен идти через text pipeline для сохранения контекста"),
+             Result.TextResponse.StartsWith(TEXT("text::")));
     return true;
 }
 
