@@ -29,6 +29,7 @@
 //   - Лемматизация предикатов: сравниваются леммы (рассказать/расскажи → одна лемма).
 
 #include "FIntentExtractor.h"
+#include "FMorphAnalyzer.h"
 
 namespace
 {
@@ -120,6 +121,86 @@ namespace
             || ObjectLower == TEXT("понятие")
             || ObjectLower == TEXT("выражение");
     }
+
+    bool IsMeaningMarkerToken(const FString& TokenLower)
+    {
+        return TokenLower == TEXT("значение")
+            || TokenLower == TEXT("определение")
+            || TokenLower == TEXT("смысл");
+    }
+
+    bool IsTermMetaToken(const FString& TokenLower)
+    {
+        return TokenLower == TEXT("слово")
+            || TokenLower == TEXT("слова")
+            || TokenLower == TEXT("термин")
+            || TokenLower == TEXT("термина")
+            || TokenLower == TEXT("понятие")
+            || TokenLower == TEXT("выражение");
+    }
+
+    bool TryExtractTermByExplicitPattern(const FString& Phrase, FString& OutTerm)
+    {
+        const FString Lower = Phrase.ToLower();
+        const TArray<FString> Markers = {
+            TEXT("найди значение "),
+            TEXT("найди определение "),
+            TEXT("найти значение "),
+            TEXT("найти определение "),
+            TEXT("значение слова "),
+            TEXT("определение термина ")
+        };
+
+        for (const FString& Marker : Markers)
+        {
+            const int32 MarkerPos = Lower.Find(Marker);
+            if (MarkerPos == INDEX_NONE)
+                continue;
+
+            const int32 EntityStart = MarkerPos + Marker.Len();
+            OutTerm = CleanEntity(Phrase.Mid(EntityStart));
+            if (!OutTerm.IsEmpty() && !IsTermMetaToken(OutTerm.ToLower()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool TryExtractFirstNounAfterMeaningMeta(const FString& Phrase, FString& OutTerm)
+    {
+        FMorphAnalyzer Analyzer;
+        const TArray<FMorphResult> Tokens = Analyzer.AnalyzePhrase(Phrase);
+        bool bMetaSeen = false;
+
+        for (const FMorphResult& Token : Tokens)
+        {
+            const FString Lower = Token.Lemma.IsEmpty()
+                                      ? Token.OriginalWord.ToLower()
+                                      : Token.Lemma.ToLower();
+
+            if (IsMeaningMarkerToken(Lower) || IsTermMetaToken(Lower))
+            {
+                bMetaSeen = true;
+                continue;
+            }
+
+            if (bMetaSeen && Token.PartOfSpeech == EPosTag::Noun)
+            {
+                OutTerm = CleanEntity(Token.OriginalWord);
+                return !OutTerm.IsEmpty();
+            }
+        }
+
+        return false;
+    }
+
+    bool TryExtractMeaningTerm(const FString& Phrase, FString& OutTerm)
+    {
+        return TryExtractTermByExplicitPattern(Phrase, OutTerm)
+            || TryExtractFirstNounAfterMeaningMeta(Phrase, OutTerm);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -158,10 +239,21 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
     // 3. Predicate ∈ {найти} + Object ∈ {значение, определение, смысл} → FindMeaning
     if (IsFindPredicate(PredLower) && IsDefinitionObject(ObjectLower))
     {
+        FString Term;
+        if (!TryExtractMeaningTerm(OriginalPhrase, Term))
+        {
+            // Frame определил только мета-объект ("значение"/"определение"),
+            // но не целевой термин. Передаём управление fallback-паттернам.
+            Result.IntentID      = EIntentID::Unknown;
+            Result.Confidence    = 0.0f;
+            Result.DecisionTrace = TEXT("");
+            return Result;
+        }
+
         Result.IntentID      = EIntentID::FindMeaning;
-        Result.EntityTarget  = Frame.Object;
+        Result.EntityTarget  = Term;
         Result.Confidence    = 0.9f;
-        Result.DecisionTrace = TEXT("Frame.Predicate:найти+DefinitionObject");
+        Result.DecisionTrace = TEXT("Frame.Predicate:найти+DefinitionObject+ExtractedTerm");
         return Result;
     }
 
