@@ -9,6 +9,23 @@
 
 #define NEIRA_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
+namespace
+{
+    const FSemanticFrame::FAmbiguousDecisionTrace* FindTraceByToken(
+        const FSemanticFrame& Frame,
+        const FString& TokenLower)
+    {
+        for (const FSemanticFrame::FAmbiguousDecisionTrace& Trace : Frame.AmbiguityTrace)
+        {
+            if (Trace.Token.ToLower() == TokenLower)
+            {
+                return &Trace;
+            }
+        }
+        return nullptr;
+    }
+}
+
 // ===========================================================================
 // Predicate — глагол извлекается корректно
 // ===========================================================================
@@ -175,6 +192,82 @@ bool FSyntaxParser_EmptyPhrase_EmptyFrame::RunTest(const FString& Parameters)
     FSyntaxParser Parser;
     FSemanticFrame F = Parser.Parse(TEXT(""), EPhraseType::Unknown);
     TestTrue(TEXT("Пустая фраза → IsEmpty()"), F.IsEmpty());
+    return true;
+}
+
+// ===========================================================================
+// Ambiguity trace — объяснимое разрешение конфликтов POS
+// ===========================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSyntaxParser_AmbiguousToken_HasTwoCandidates,
+    "Neira.SyntaxParser.AmbiguityTrace_HasTwoCandidates",
+    NEIRA_TEST_FLAGS)
+bool FSyntaxParser_AmbiguousToken_HasTwoCandidates::RunTest(const FString& Parameters)
+{
+    FSyntaxParser Parser;
+    FSemanticFrame F = Parser.Parse(TEXT("расскажи что такое морфология"), EPhraseType::Request);
+
+    const FSemanticFrame::FAmbiguousDecisionTrace* Trace = FindTraceByToken(F, TEXT("что"));
+    TestNotNull(TEXT("Trace для 'что' присутствует"), Trace);
+    if (Trace == nullptr)
+        return false;
+
+    TestTrue(TEXT("У trace минимум 2 кандидата"), Trace->CandidatePOS.Num() >= 2);
+    TestEqual(TEXT("Выбран POS для 'что' — Conjunction"), Trace->SelectedPOS, FString(TEXT("Conjunction")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSyntaxParser_AmbiguousToken_ReasonAndConfidenceFilled,
+    "Neira.SyntaxParser.AmbiguityTrace_ReasonAndConfidenceFilled",
+    NEIRA_TEST_FLAGS)
+bool FSyntaxParser_AmbiguousToken_ReasonAndConfidenceFilled::RunTest(const FString& Parameters)
+{
+    FSyntaxParser Parser;
+    FSemanticFrame F = Parser.Parse(TEXT("расскажи что такое морфология"), EPhraseType::Request);
+
+    const FSemanticFrame::FAmbiguousDecisionTrace* Trace = FindTraceByToken(F, TEXT("что"));
+    TestNotNull(TEXT("Trace для 'что' присутствует"), Trace);
+    if (Trace == nullptr)
+        return false;
+
+    TestFalse(TEXT("Reason заполнен"), Trace->Reason.IsEmpty());
+    TestFalse(TEXT("Anchor заполнен"), Trace->Anchor.IsEmpty());
+    TestTrue(TEXT("Confidence > 0"), Trace->Confidence > 0.0f);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSyntaxParser_AmbiguousToken_DeterministicAcrossRuns,
+    "Neira.SyntaxParser.AmbiguityTrace_DeterministicAcrossRuns",
+    NEIRA_TEST_FLAGS)
+bool FSyntaxParser_AmbiguousToken_DeterministicAcrossRuns::RunTest(const FString& Parameters)
+{
+    FSyntaxParser Parser;
+    FString FirstSelected;
+    FString FirstReason;
+
+    for (int32 Run = 0; Run < 5; ++Run)
+    {
+        FSemanticFrame F = Parser.Parse(TEXT("расскажи что такое морфология"), EPhraseType::Request);
+        const FSemanticFrame::FAmbiguousDecisionTrace* Trace = FindTraceByToken(F, TEXT("что"));
+        TestNotNull(TEXT("Trace для 'что' присутствует на каждом запуске"), Trace);
+        if (Trace == nullptr)
+            return false;
+
+        if (Run == 0)
+        {
+            FirstSelected = Trace->SelectedPOS;
+            FirstReason = Trace->Reason;
+        }
+        else
+        {
+            TestEqual(TEXT("Выбранный POS стабилен"), Trace->SelectedPOS, FirstSelected);
+            TestEqual(TEXT("Причина выбора стабильна"), Trace->Reason, FirstReason);
+        }
+    }
+
     return true;
 }
 
