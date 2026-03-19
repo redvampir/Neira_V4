@@ -90,6 +90,68 @@ bool FBeliefEngine_GetDefinition_ConfirmsExisting::RunTest(const FString& Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FBeliefEngine_GetDefinition_LowConfidence_RejectedWithoutConfirm,
+    "Neira.BeliefEngine.GetDefinition_LowConfidence_RejectedWithoutConfirm",
+    NEIRA_TEST_FLAGS)
+bool FBeliefEngine_GetDefinition_LowConfidence_RejectedWithoutConfirm::RunTest(const FString& Parameters)
+{
+    FBeliefEngine Engine;
+    FHypothesisStore Store;
+
+    FHypothesis H;
+    H.Claim = TEXT("кот");
+    const int32 ID = Store.Store(H);
+
+    FIntentResult Intent;
+    Intent.IntentID     = EIntentID::GetDefinition;
+    Intent.EntityTarget = TEXT("кот");
+    Intent.Confidence   = 0.58f; // 0.58 * 0.85 = 0.493 < 0.50
+
+    FBeliefDecision D = Engine.Process(Intent, Store, EHypothesisSource::UserConfirm);
+
+    TestEqual(TEXT("Action == Rejected"), D.Action, EBeliefAction::Rejected);
+    const FHypothesis* Stored = Store.Find(ID);
+    TestNotNull(TEXT("Stored hypothesis exists"), Stored);
+    if (Stored != nullptr)
+    {
+        TestEqual(TEXT("ConfirmCount не увеличился"), Stored->ConfirmCount, 0);
+        TestEqual(TEXT("State остаётся Pending"), Stored->State, EKnowledgeState::Pending);
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FBeliefEngine_GetDefinition_ConfirmThresholdBoundary_Deterministic,
+    "Neira.BeliefEngine.GetDefinition_ConfirmThresholdBoundary_Deterministic",
+    NEIRA_TEST_FLAGS)
+bool FBeliefEngine_GetDefinition_ConfirmThresholdBoundary_Deterministic::RunTest(const FString& Parameters)
+{
+    FBeliefEngine Engine;
+    FHypothesisStore Store;
+
+    FHypothesis H;
+    H.Claim = TEXT("кошка");
+    const int32 ID = Store.Store(H);
+
+    FIntentResult Intent;
+    Intent.IntentID     = EIntentID::GetDefinition;
+    Intent.EntityTarget = TEXT("кошка");
+    Intent.Confidence   = 0.50f / 0.85f; // AppliedConfidence ровно на пороге 0.50
+
+    FBeliefDecision D = Engine.Process(Intent, Store, EHypothesisSource::UserConfirm);
+
+    TestEqual(TEXT("Action == Confirmed на границе порога"), D.Action, EBeliefAction::Confirmed);
+    const FHypothesis* Stored = Store.Find(ID);
+    TestNotNull(TEXT("Stored hypothesis exists"), Stored);
+    if (Stored != nullptr)
+    {
+        TestEqual(TEXT("ConfirmCount увеличился до 1"), Stored->ConfirmCount, 1);
+        TestEqual(TEXT("State == Confirmed"), Stored->State, EKnowledgeState::Confirmed);
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FBeliefEngine_GetDefinition_NoMatch_IfNotStored,
     "Neira.BeliefEngine.GetDefinition_NoMatch_IfNotStored",
     NEIRA_TEST_FLAGS)

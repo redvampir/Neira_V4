@@ -47,7 +47,9 @@ struct NEIRACORE_API FBeliefDecision
  *   AutoInference      0.60
  *   Unknown            0.50
  *
- * Порог создания: AppliedConfidence >= 0.30f.
+ * Порог записи:
+ *   - store_threshold   = 0.30f (для StoreFact).
+ *   - confirm_threshold = 0.50f (для запросных интентов перед Confirm/Verify).
  *
  * Реализация: v0.4
  */
