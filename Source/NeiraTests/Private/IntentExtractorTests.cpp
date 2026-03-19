@@ -171,18 +171,25 @@ bool FIntentExtractor_Frame_Question_EntityFromObject::RunTest(const FString& Pa
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-    FIntentExtractor_Frame_FindPredicate_ReturnsFindMeaning,
-    "Neira.IntentExtractor.Frame_CommandFind_ReturnsFindMeaning",
+    FIntentExtractor_Frame_FindPredicate_WithoutTerm_FailsByContract,
+    "Neira.IntentExtractor.Frame_CommandFind_WithoutTerm_FailsByContract",
     NEIRA_TEST_FLAGS)
-bool FIntentExtractor_Frame_FindPredicate_ReturnsFindMeaning::RunTest(const FString& Parameters)
+bool FIntentExtractor_Frame_FindPredicate_WithoutTerm_FailsByContract::RunTest(const FString& Parameters)
 {
-    // «найди значение слова» — Predicate="найти", Object="значение"
-    // Frame step 3: IsFindPredicate + IsDefinitionObject → FindMeaning
+    // Negative-case: термин не извлечён.
+    // Допускаем Unknown/PartialParse по контракту, важно не принимать мета-слово как целевую сущность.
     FIntentExtractor Extractor;
     FIntentResult Result = Extractor.Extract(
         TEXT("найди значение слова"), EPhraseType::Command);
-    TestEqual(TEXT("Frame.найти+значение → FindMeaning"),
-        Result.IntentID, EIntentID::FindMeaning);
+    const bool bUnknownByContract =
+        Result.IntentID == EIntentID::Unknown
+        || Result.FailReason == EActionFailReason::PartialParse;
+    TestTrue(TEXT("Команда без термина → Unknown или PartialParse (контракт fail-path)"),
+        bUnknownByContract);
+    TestTrue(TEXT("DecisionTrace показывает frame-path или fallback-path"),
+        Result.DecisionTrace.Contains(TEXT("Frame."))
+        || Result.DecisionTrace.Contains(TEXT("Fallback:"))
+        || Result.DecisionTrace.Contains(TEXT("Pattern:")));
     return true;
 }
 
@@ -213,6 +220,65 @@ bool FIntentExtractor_Frame_FindMeaning_ExtractsMorphologyTerm::RunTest(const FS
     TestEqual(TEXT("Intent → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
     TestEqual(TEXT("EntityTarget → 'морфология'"),
         Result.EntityTarget, FString(TEXT("морфология")));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// v0.3: Явный блок FindMeaning/GetDefinition + DecisionTrace
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Block_WhatMeansSyntax_GetDefinition,
+    "Neira.IntentExtractor.Block.WhatMeansSyntax_ReturnsGetDefinition",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Block_WhatMeansSyntax_GetDefinition::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("что означает слово синтаксис?"), EPhraseType::Question);
+
+    TestEqual(TEXT("Intent → GetDefinition"), Result.IntentID, EIntentID::GetDefinition);
+    TestEqual(TEXT("EntityTarget → 'синтаксис'"),
+        Result.EntityTarget, FString(TEXT("синтаксис")));
+    TestTrue(TEXT("DecisionTrace содержит fallback-path"),
+        Result.DecisionTrace.Contains(TEXT("Pattern:"))
+        || Result.DecisionTrace.Contains(TEXT("Fallback:")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Block_FindMeaningSyntax_ReturnsFindMeaning,
+    "Neira.IntentExtractor.Block.FindMeaningSyntax_ReturnsFindMeaning",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Block_FindMeaningSyntax_ReturnsFindMeaning::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("найди значение слова синтаксис"), EPhraseType::Command);
+
+    TestEqual(TEXT("Intent → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
+    TestEqual(TEXT("EntityTarget → 'синтаксис'"),
+        Result.EntityTarget, FString(TEXT("синтаксис")));
+    TestTrue(TEXT("DecisionTrace содержит frame-path"),
+        Result.DecisionTrace.Contains(TEXT("Frame.")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_Block_FindMeaningMemory_ReturnsFindMeaning,
+    "Neira.IntentExtractor.Block.FindMeaningMemory_ReturnsFindMeaning",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_Block_FindMeaningMemory_ReturnsFindMeaning::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("найди определение термина память"), EPhraseType::Command);
+
+    TestEqual(TEXT("Intent → FindMeaning"), Result.IntentID, EIntentID::FindMeaning);
+    TestEqual(TEXT("EntityTarget → 'память'"),
+        Result.EntityTarget, FString(TEXT("память")));
+    TestTrue(TEXT("DecisionTrace содержит frame-path"),
+        Result.DecisionTrace.Contains(TEXT("Frame.")));
     return true;
 }
 
