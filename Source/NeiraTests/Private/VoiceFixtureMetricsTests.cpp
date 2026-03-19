@@ -4,6 +4,7 @@
 #include "FIntentExtractor.h"
 #include "FMorphAnalyzer.h"
 
+#include "../Fixtures/RegressionIntentFrameFixtures.h"
 #include "../Fixtures/VoiceFixtures.h"
 
 #include <chrono>
@@ -27,6 +28,20 @@ namespace
     {
         const FString LowerWord = Word.ToLower();
         for (const FVoiceFixture& Fx : Fixtures)
+        {
+            if (Fx.Phrase.ToLower().Contains(LowerWord))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    bool IsWordCoveredByRegressionFixtures(const FString& Word, const TArray<FRegressionFixture>& Fixtures)
+    {
+        const FString LowerWord = Word.ToLower();
+        for (const FRegressionFixture& Fx : Fixtures)
         {
             if (Fx.Phrase.ToLower().Contains(LowerWord))
             {
@@ -71,10 +86,10 @@ bool FVoiceFixtures_CoverageByCategory::RunTest(const FString& Parameters)
         }
     }
 
-    TestTrue(TEXT("Есть короткие команды"), ShortCommands > 0);
+    TestTrue(TEXT("Есть минимум 20 чистых команд"), ShortCommands >= 20);
     TestTrue(TEXT("Есть вопросы"), Questions > 0);
-    TestTrue(TEXT("Есть разговорные варианты"), Conversational > 0);
-    TestTrue(TEXT("Есть типовые ошибки распознавания"), AsrErrors > 0);
+    TestTrue(TEXT("Есть минимум 10 разговорных вариантов"), Conversational >= 10);
+    TestTrue(TEXT("Есть минимум 10 типовых ошибок распознавания"), AsrErrors >= 10);
 
     return true;
 }
@@ -195,6 +210,31 @@ bool FVoiceLexiconPolicy_NoDictionaryWordWithoutFixture::RunTest(const FString& 
 
         const bool bCoveredByFixture = IsWordCoveredByVoiceFixtures(Word, Fixtures);
         TestTrue(*FString::Printf(TEXT("Слово '%s' обязано иметь voice fixture-кейс"), *Word), bCoveredByFixture);
+    }
+
+    return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVoiceLexiconPolicy_NewDictionaryWordRequiresFixtureAndRegression,
+    "Neira.VoiceFixtures.Policy.NewDictionaryWordRequiresFixtureAndRegression",
+    NEIRA_TEST_FLAGS)
+bool FVoiceLexiconPolicy_NewDictionaryWordRequiresFixtureAndRegression::RunTest(const FString& Parameters)
+{
+    const TArray<FString>& GovernedWords = GetVoiceDictionaryGrowthGuardWords();
+    const TArray<FVoiceFixture>& VoiceFixtures = GetVoiceFixtures();
+    const TArray<FRegressionFixture>& RegressionFixtures = GetRUENRegressionFixtures();
+
+    for (const FString& Word : GovernedWords)
+    {
+        const bool bCoveredByVoiceFixture = IsWordCoveredByVoiceFixtures(Word, VoiceFixtures);
+        const bool bCoveredByRegressionFixture = IsWordCoveredByRegressionFixtures(Word, RegressionFixtures);
+
+        TestTrue(*FString::Printf(TEXT("Слово '%s' обязано иметь минимум 1 voice fixture"), *Word),
+                 bCoveredByVoiceFixture);
+        TestTrue(*FString::Printf(TEXT("Слово '%s' обязано иметь минимум 1 regression fixture (тестовый сценарий)"), *Word),
+                 bCoveredByRegressionFixture);
     }
 
     return true;

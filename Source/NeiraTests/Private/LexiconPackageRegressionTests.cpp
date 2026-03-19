@@ -161,4 +161,46 @@ bool FLexiconPackages_NoWordWithoutScenario::RunTest(const FString& Parameters)
     return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FLexiconPackages_Policy_NoMassDictionaryWithoutScenarios,
+    "Neira.LexiconPackages.Policy.NoMassDictionaryWithoutScenarios",
+    NEIRA_TEST_FLAGS)
+bool FLexiconPackages_Policy_NoMassDictionaryWithoutScenarios::RunTest(const FString& Parameters)
+{
+    const TArray<FLexiconScenarioPackage>& Packages = GetLexiconScenarioPackages();
+    const TArray<FRegressionFixture>& RegressionFixtures = GetRUENRegressionFixtures();
+    const TArray<FVoiceFixture>& VoiceFixtures = GetVoiceFixtures();
+
+    for (const FLexiconScenarioPackage& Package : Packages)
+    {
+        int32 ScenarioCount = 0;
+
+        for (const FRegressionFixture& Fx : RegressionFixtures)
+        {
+            if (Fx.Category == Package.Name)
+            {
+                ++ScenarioCount;
+            }
+        }
+
+        for (const FVoiceFixture& VoiceFx : VoiceFixtures)
+        {
+            if (VoiceFx.Category == Package.Name)
+            {
+                ++ScenarioCount;
+            }
+        }
+
+        const int32 HalfWordCount = Package.RequiredWords.Num() / 2;
+        const int32 MinScenarioCount = (HalfWordCount > 10) ? HalfWordCount : 10;
+        TestTrue(
+            *FString::Printf(TEXT("[%s] Нельзя добавлять массовый словарь без сценариев: scenarios >= %d (факт: %d)"),
+                             *Package.Name, MinScenarioCount, ScenarioCount),
+            ScenarioCount >= MinScenarioCount);
+    }
+
+    return true;
+}
+
 #undef NEIRA_TEST_FLAGS
