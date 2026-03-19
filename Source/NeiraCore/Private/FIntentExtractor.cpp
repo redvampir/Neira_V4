@@ -217,7 +217,8 @@ namespace
             if (bMetaSeen && Token.PartOfSpeech == EPosTag::Noun)
             {
                 OutTerm = StripLeadingTermMetaToken(Token.OriginalWord);
-                return !OutTerm.IsEmpty();
+                if (!OutTerm.IsEmpty() && !IsTermMetaToken(OutTerm.ToLower()))
+                    return true;
             }
         }
 
@@ -352,9 +353,14 @@ FIntentResult FIntentExtractor::ExtractFromPatterns(const FString& Phrase) const
         if (P.bExtractAfterMarker)
         {
             // Берём оригинальную строку (не Lower) чтобы сохранить регистр сущности
-            int32 EntityStart   = MarkerPos + P.Marker.Len();
-            FString Raw         = Phrase.Mid(EntityStart);
-            Result.EntityTarget = CleanEntity(Raw);
+            int32 EntityStart = MarkerPos + P.Marker.Len();
+            FString Raw       = Phrase.Mid(EntityStart);
+            FString Term      = StripLeadingTermMetaToken(CleanEntity(Raw));
+            // Если после очистки остался мета-токен или пустая строка —
+            // паттерн не дал реального термина, пропускаем.
+            if (Term.IsEmpty() || IsTermMetaToken(Term.ToLower()))
+                continue;
+            Result.EntityTarget = Term;
         }
 
         return Result;
