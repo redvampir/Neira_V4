@@ -41,7 +41,16 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
-.PHONY: all run regression-gate clean
+.PHONY: all run regression-gate mode-matrix clean
+
+# Execution mode matrix:
+# - run             : full quality diagnostics (all tests in neira_tests).
+#                     Expected outcome: full suite passes.
+#                     Return code: 0 on full pass, non-zero on any failing test or runtime error.
+# - regression-gate : merge-blocking drift-only gate (Neira.RegressionGate.* tests only).
+#                     Expected outcome: no FAIL entries for drift metrics.
+#                     Return code: 0 when no drift regressions are detected,
+#                                  1 when at least one Neira.RegressionGate.* test fails.
 
 all: neira_tests
 
@@ -56,6 +65,11 @@ regression-gate: neira_tests
 	bash -o pipefail -c "./neira_tests | tee regression_gate.log || true"
 	bash -o pipefail -c "grep -Eq '^  (PASS|FAIL)  Neira\\.RegressionGate\\.' regression_gate.log || echo '[regression-gate] WARNING: no executable Neira.RegressionGate.* tests found in binary'"
 	! grep -Eq '^  FAIL  Neira\\.RegressionGate\\.' regression_gate.log
+
+mode-matrix:
+	@echo "Mode              Scope                                      Expected outcome                               Return code"
+	@echo "run               Full quality diagnostics                    Full suite passes                               0=pass; non-zero=any test/runtime failure"
+	@echo "regression-gate   Merge-blocking drift metrics only          No FAIL in Neira.RegressionGate.*              0=no drift regression; 1=drift regression detected"
 
 clean:
 	rm -f neira_tests *.o

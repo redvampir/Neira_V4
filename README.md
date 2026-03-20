@@ -1134,6 +1134,21 @@ Actions → `BlueprintCallable` методы
 <a id="build-run-test"></a>
 ## Build / Run / Test
 
+### Матрица режимов запуска (Source/Tests/Makefile)
+
+| Режим | Назначение | Expected outcome | Код возврата |
+|------|------------|------------------|--------------|
+| `run` | Полная диагностика качества (весь набор тестов в `neira_tests`) | Все тесты проходят без падений раннера | `0` — полный PASS; `!=0` — есть FAIL и/или runtime/build ошибка |
+| `regression-gate` | Merge-blocking gate только по drift-метрикам (`Neira.RegressionGate.*`) | В логе нет `FAIL` для `Neira.RegressionGate.*` | `0` — drift-регрессий нет; `1` — обнаружена drift-регрессия |
+
+Быстрый вызов:
+
+```bash
+cd Source/Tests
+make run
+make regression-gate
+```
+
 ### Минимальные требования
 
 - Unreal Engine: зафиксировать версию в проекте;
