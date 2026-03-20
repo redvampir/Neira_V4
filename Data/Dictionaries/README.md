@@ -47,7 +47,7 @@
 | Рабочий конвертер | `Data/Dictionaries/convert_opencorpora_simple.py` | Конвертация OpenCorpora в упрощенный формат | `Prepared` |
 | Исторический конвертер | `Data/Dictionaries/convert_opencorpora_to_neira.py` | Более ранняя версия конвертера | `Prepared` |
 | Загрузчик/получение исходника | `Data/Dictionaries/download_opencorpora_dict.py` | Скрипт скачивания/подготовки исходных данных | `Prepared` |
-| Сконвертированный JSON | `../../Source/Tests/opencorpora_dict.json` | Текущий runtime JSON-словарь в этом checkout; путь может быть переопределен через `NEIRA_EXTERNAL_DICT_PATH` | `Integrated` |
+| Сконвертированный JSON (fixture в репозитории) | `Data/Dictionaries/opencorpora_dict.json` | Минимальный runtime JSON для автотеста внешнего словаря; путь может быть переопределен через `NEIRA_EXTERNAL_DICT_PATH` | `Integrated` |
 | Проектный JSON-словарь | `Data/Dictionaries/neira_dict.json` | Предполагаемый легкий внешний словарь проекта | `Planned` |
 
 ---
@@ -138,6 +138,7 @@
 - cold-start policy по умолчанию = `lazy`: словарь не парсится на пустом старте и поднимается при первом реальном внешнем lookup;
 - memory/cold-start guard задаются через `NEIRA_EXTERNAL_DICT_MODE`, `NEIRA_EXTERNAL_DICT_PATH`, `NEIRA_EXTERNAL_DICT_MAX_MB`.
 - внешний lookup работает в runtime и покрыт тестом `Neira.MorphAnalyzer.ExternalDictionary.AutoLoadAndLookup`.
+- для стабильности CI в репозитории хранится минимальный fixture `Data/Dictionaries/opencorpora_dict.json`, чтобы тест внешнего словаря не зависел от локального окружения разработчика.
 
 Что еще не сделано:
 

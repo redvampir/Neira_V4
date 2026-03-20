@@ -7,8 +7,44 @@
 #include "Misc/AutomationTest.h"
 #include "FMorphAnalyzer.h"
 #include "FHypothesisStore.h"
+#include <cstdio>
 
 #define NEIRA_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+namespace
+{
+    bool FixtureFileExists(const FString& Path)
+    {
+        FILE* File = std::fopen(TCHAR_TO_ANSI(*Path), "rb");
+        if (!File)
+        {
+            return false;
+        }
+
+        std::fclose(File);
+        return true;
+    }
+
+    FString ResolveExternalDictionaryFixturePath()
+    {
+        const TArray<FString> Candidates = {
+            TEXT("Data/Dictionaries/opencorpora_dict.json"),
+            TEXT("../Data/Dictionaries/opencorpora_dict.json"),
+            TEXT("../../Data/Dictionaries/opencorpora_dict.json"),
+            TEXT("../../../Data/Dictionaries/opencorpora_dict.json")
+        };
+
+        for (const FString& Candidate : Candidates)
+        {
+            if (FixtureFileExists(Candidate))
+            {
+                return Candidate;
+            }
+        }
+
+        return FString();
+    }
+}
 
 // ===========================================================================
 // FMorphAnalyzer — словарный путь
@@ -303,6 +339,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FMorphAnalyzer_ExternalDictionary_AutoLoadAndLookup::RunTest(const FString& Parameters)
 {
     FMorphAnalyzer A;
+    const FString FixturePath = ResolveExternalDictionaryFixturePath();
+    TestFalse(TEXT("Fixture path должен быть найден в репозитории"), FixturePath.IsEmpty());
+
+    if (FixturePath.IsEmpty())
+    {
+        return false;
+    }
+
+    TestTrue(TEXT("Fixture должен успешно загрузиться"),
+        A.LoadExternalDictionary(FixturePath));
 
     FMorphResult R = A.Analyze(TEXT("абажур"));
     TestEqual(TEXT("external word: POS → Noun"),
