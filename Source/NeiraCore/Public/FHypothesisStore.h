@@ -21,6 +21,10 @@ struct NEIRACORE_API FHypothesis
     FString            Reason;                             // причина текущего статуса
     int32              ConfirmCount  = 0;                  // v0.2: счётчик подтверждений
     EHypothesisSource  SourceType    = EHypothesisSource::Unknown; // v0.4: тип источника
+    EDataClassification DataClass    = EDataClassification::NonPII; // v0.6: privacy-класс
+    bool               bPIIAllowed   = false;              // v0.6: явное разрешение на PII
+    int64              CreatedSeq    = 0;                  // v0.6: sequence для retention
+    int64              UpdatedSeq    = 0;                  // v0.6: sequence для retention
 };
 
 /**
@@ -40,6 +44,13 @@ struct NEIRACORE_API FHypothesisEvent
     EKnowledgeState ToState      = EKnowledgeState::Pending;
     FString         MethodName;  // "Store" | "Confirm" | "Verify" | "MarkConflicted"
     FString         Reason;
+    EDataClassification DataClass = EDataClassification::NonPII; // privacy label event-log записи
+};
+
+struct NEIRACORE_API FDataRetentionPolicy
+{
+    int64 NonPIIRetentionOps = 1000;
+    int64 PIIRetentionOps    = 50;
 };
 
 /**
@@ -132,7 +143,32 @@ struct NEIRACORE_API FHypothesisStore
     /** Очистить журнал. Используется в тестах и при сбросе хранилища. */
     void ClearEventLog();
 
+    /** Установить retention policy для очистки. */
+    void SetRetentionPolicy(const FDataRetentionPolicy& InPolicy);
+
+    /**
+     * Очистить устаревшие записи по retention policy.
+     * Возвращает число очищенных гипотез.
+     */
+    int32 PurgeExpired();
+
+    /**
+     * v0.6 guard: PII не хранится без явного разрешения.
+     * false => запись отклоняется.
+     */
+    static bool CanStoreHypothesis(const FHypothesis& Hypothesis);
+
 private:
     TArray<FHypothesis>      Hypotheses;
     TArray<FHypothesisEvent> EventLog;
+    FDataRetentionPolicy     RetentionPolicy;
+    int64                    SequenceCounter = 0;
+
+    int64 NextSequence();
+    void AppendEvent(int32 HypothesisID,
+                     EKnowledgeState FromState,
+                     EKnowledgeState ToState,
+                     const FString& MethodName,
+                     const FString& Reason,
+                     EDataClassification DataClass);
 };

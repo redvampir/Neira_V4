@@ -63,8 +63,16 @@ FBeliefDecision FBeliefEngine::Process(const FIntentResult&  Intent,
         H.Confidence = AppliedConfidence;
         H.SourceType = Source;
         H.Source     = TEXT("BeliefEngine");
+        H.DataClass  = EDataClassification::NonPII;
+        H.bPIIAllowed = false;
 
         Decision.HypothesisID = Store.Store(H);
+        if (Decision.HypothesisID < 0)
+        {
+            Decision.Action = EBeliefAction::Rejected;
+            Decision.Reason = TEXT("privacy policy: запись гипотезы запрещена");
+            return Decision;
+        }
         Decision.Action       = EBeliefAction::Created;
         Decision.Reason       = TEXT("StoreFact → гипотеза создана");
         return Decision;
