@@ -4,8 +4,8 @@
 >
 > Этот документ является основным source of truth по актуальному статусу проекта. Исторические audit-отчеты полезны как контекст, но не должны переопределять текущий статус из этого файла.
 
-Дата фиксации: **2026-03-20**  
-Последняя локальная проверка: `Source/Tests/neira_tests.exe` -> **146/146 PASS**  
+Дата фиксации: **2026-03-20**
+Последняя локальная проверка: `make -C Source/Tests run` -> **199/200 PASS** (1 pre-existing: OpenCorpora JSON отсутствует в тестовом окружении)
 Ограничение текущего Windows PowerShell-окружения: `bash` доступен, `make` отсутствует; поэтому команда `make regression-gate` пока не является универсально воспроизводимой без дополнительной установки GNU `make`.
 
 ## Навигация
@@ -29,12 +29,13 @@
 <a id="snapshot"></a>
 ## Быстрый снимок
 
-- v0.1-v0.4 реализованы в коде и подтверждаются локальным нативным тестовым раннером.
+- v0.1-v0.5 реализованы в коде и подтверждаются локальным нативным тестовым раннером.
 - Встроенный словарь runtime-интегрирован; OpenCorpora тоже встроен в runtime-path `FMorphAnalyzer` через внешний JSON-словарь, shared cache и lazy-load policy с size guard.
 - `NeiraDialog` получил P0 meta-dialog routing для greeting/self-description/capability/courtesy/farewell сценариев и более естественный fallback без debug-profile блока в обычном режиме.
+- **v0.5 NLG:** `FSentencePlanner` реализован — ~55 стратегий по (IntentID × EConfidenceLevel × EResponseTone); `FResponseGenerator` переведён с debug-dump на натуральные русские предложения; детерминированная ротация через `SessionResponseCount`; добавлены `EConfidenceLevel`, `EntityTarget`, `StrategyID`.
 - `ThresholdRegressionGateTests.cpp`, `MemoryPressurePolicyTests.cpp` и `DoDIntegrationTests.cpp` подключены в `Source/Tests/Makefile`.
 - Merge-blocking workflow `regression-gate` остается операционно незавершенным: обертка есть, но ее канонический запуск зависит от наличия GNU `make`.
-- Следующий этап: Privacy/Security baseline -> SLA C++/Blueprint -> migration playbook для v0.4+.
+- Следующий этап: FMorphRealizer (падежное согласование, фаза 2 NLG) или Privacy/Security baseline.
 
 ---
 
@@ -61,6 +62,7 @@
 | Реализация v0.3 синтаксис | `Done` | `FSyntaxParser` интегрирован в intent-path, есть ambiguous trace, memory pressure policy и integration coverage. | При расширении синтаксиса не ломать детерминизм и explainability. |
 | Технический долг v0.3 | `Done` | `EventLog`, `DecisionTrace`, fail-reason pipeline и regression fixtures находятся в репозитории. | Поддерживать трассировку как обязательный инвариант при новых изменениях. |
 | Реализация v0.4 рассуждения | `Done` | `FBeliefEngine`, веса источников, `Downgrade()`, `FindByClaim()` и negative tests для low-confidence query-intents присутствуют и проходят локально. | Следующий шаг уже не про наличие кода, а про privacy/SLA/migration layer вокруг него. |
+| Реализация v0.5 NLG | `Done` | `FSentencePlanner` (~55 стратегий), `EConfidenceLevel`, детерминированная ротация через `SessionResponseCount`, `StrategyID` в `FResponseGenerationOutput`. `FResponseGenerator` производит натуральные русские предложения вместо debug-dump. 199/200 PASS. | Фаза 2: `FMorphRealizer` (падежное согласование без суффиксных костылей). |
 | Формальные контракты модулей | `Done` | [Module_Contracts_v1.md](../Contracts/Module_Contracts_v1.md) и `Error_Catalog.md` фиксируют schema, инварианты, диапазоны и recovery expectations. | Машинно-читаемые schema-файлы при переходе к следующему уровню интеграции. |
 | Память и транзакционность | `Done` | `FHypothesisEvent` append-only, успешные переходы пишутся в `EventLog`, negative cases покрыты тестами. | Replay/idempotency как следующий уровень зрелости. |
 | Explainability и аудит | `Done` | `DecisionTrace` и `EventLog` дают базовую объяснимость по intent и knowledge transitions. | Полный forensic dump и trace-id через весь pipeline. |
@@ -152,8 +154,9 @@
 - `Done` Формальные контракты модулей v1 опубликованы.
 - `Done` Встроенный словарь расширен до 1000+ форм и работает в runtime.
 - `Done` OpenCorpora скачан, сконвертирован и интегрирован в runtime-path `FMorphAnalyzer` с lazy-load policy и size guard.
-- `Done` Локальный нативный тестовый раннер на 2026-03-20 дает `146/146 PASS`.
-- `Next` Следующий этап: Privacy/Security baseline -> SLA C++/Blueprint -> migration playbook v0.4+.
+- `Done` Локальный нативный тестовый раннер на 2026-03-20 дает `146/146 PASS` (NeiraDialog snapshot), нативный Linux runner — `199/200 PASS`.
+- `Done` v0.5 NLG: `FSentencePlanner` с библиотекой ~55 стратегий; `FResponseGenerator` переведён на натуральный язык; детерминированная ротация; 8 новых тестов `SentencePlannerTests.cpp`.
+- `Next` Следующий этап: `FMorphRealizer` (падежное согласование, фаза 2 NLG) и/или Privacy/Security baseline.
 
 ---
 
