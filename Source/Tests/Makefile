@@ -64,7 +64,7 @@ run: neira_tests
 
 regression-gate: neira_tests
 	# Merge-blocking gate for threshold/fixtures changes: fail only on metric regressions.
-	bash ../../scripts/regression_gate.sh
+	bash ./scripts/regression_gate.sh
 
 mode-matrix:
 	@echo "Mode              Scope                                      Expected outcome                               Return code"

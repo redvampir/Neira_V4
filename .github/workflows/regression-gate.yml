@@ -23,7 +23,7 @@ jobs:
         run: make -C Source/Tests neira_tests
 
       - name: Run regression gate launcher (unix)
-        run: bash scripts/regression_gate.sh
+        run: bash Source/Tests/scripts/regression_gate.sh
 
   regression-gate-windows:
     name: regression-gate (windows)
@@ -46,4 +46,4 @@ jobs:
 
       - name: Run regression gate launcher (powershell)
         shell: pwsh
-        run: .\scripts\regression_gate.ps1
+        run: .\Source\Tests\scripts\regression_gate.ps1
