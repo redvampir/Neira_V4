@@ -6,7 +6,7 @@
 
 Дата фиксации: **2026-03-20**
 Последняя локальная проверка: `make -C Source/Tests run` -> **199/200 PASS** (исторически фиксировался 1 pre-existing из-за отсутствия OpenCorpora JSON; теперь для `ExternalDictionary.AutoLoadAndLookup` действует явный skip-контракт с диагностикой)
-Regression gate переведён на platform-neutral launcher: `scripts/regression_gate.sh` (Unix) и `scripts/regression_gate.ps1` (Windows); CI запускает их как merge-blocking workflow `regression-gate`.
+Regression gate переведён на platform-neutral launcher: `Source/Tests/scripts/regression_gate.sh` (Unix) и `Source/Tests/scripts/regression_gate.ps1` (Windows); CI запускает их как merge-blocking workflow `regression-gate`.
 
 ## Навигация
 
@@ -34,7 +34,7 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 - `NeiraDialog` получил P0 meta-dialog routing для greeting/self-description/capability/courtesy/farewell сценариев и более естественный fallback без debug-profile блока в обычном режиме.
 - **v0.5 NLG:** `FSentencePlanner` реализован — ~55 стратегий по (IntentID × EConfidenceLevel × EResponseTone); `FResponseGenerator` переведён с debug-dump на натуральные русские предложения; детерминированная ротация через `SessionResponseCount`; добавлены `EConfidenceLevel`, `EntityTarget`, `StrategyID`.
 - `ThresholdRegressionGateTests.cpp`, `MemoryPressurePolicyTests.cpp` и `DoDIntegrationTests.cpp` подключены в `Source/Tests/Makefile`.
-- Merge-blocking workflow `regression-gate` операционализирован: platform-neutral launcher вынесен в `scripts/`, CI job подключена и предназначена как required check для merge.
+- Merge-blocking workflow `regression-gate` операционализирован: platform-neutral launcher вынесен в `Source/Tests/scripts/`, CI job подключена и предназначена как required check для merge.
 - Следующий этап: FMorphRealizer (падежное согласование, фаза 2 NLG) или Privacy/Security baseline.
 
 ---
@@ -66,7 +66,7 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 | Формальные контракты модулей | `Done` | [Module_Contracts_v1.md](../Contracts/Module_Contracts_v1.md) и `Error_Catalog.md` фиксируют schema, инварианты, диапазоны и recovery expectations. | Машинно-читаемые schema-файлы при переходе к следующему уровню интеграции. |
 | Память и транзакционность | `Done` | `FHypothesisEvent` append-only, успешные переходы пишутся в `EventLog`, negative cases покрыты тестами. | Replay/idempotency как следующий уровень зрелости. |
 | Explainability и аудит | `Done` | `DecisionTrace` и `EventLog` дают базовую объяснимость по intent и knowledge transitions. | Полный forensic dump и trace-id через весь pipeline. |
-| Drift/калибровка порогов | `Done` | Threshold fixtures и gate-тесты подключены; `scripts/regression_gate.sh` и `scripts/regression_gate.ps1` повторяют policy: suite-fail игнорируется, merge блокируется только на `FAIL Neira.RegressionGate.*`. | CI workflow `regression-gate` добавлен как merge-blocking job (required check на стороне branch protection). |
+| Drift/калибровка порогов | `Done` | Threshold fixtures и gate-тесты подключены; `Source/Tests/scripts/regression_gate.sh` и `Source/Tests/scripts/regression_gate.ps1` повторяют policy: suite-fail игнорируется, merge блокируется только на `FAIL Neira.RegressionGate.*`. | CI workflow `regression-gate` добавлен как merge-blocking job (required check на стороне branch protection). |
 | Security/Privacy baseline | `In Progress` | Добавлен policy-док `Data_Classification_and_Retention.md`; в `FHypothesisStore` включены PII guard (без explicit allow запись блокируется) и retention purge с `RetentionPurge` в event-log; добавлены минимальные тесты. | Довести policy до сквозного runtime-логирования (DecisionTrace/Console logs) и формализовать access-control слой. |
 | C++ vs Blueprint SLA-границы | `Next` | Функциональная граница описана, необходимость нефункциональных контрактов зафиксирована. | Документированные latency/threading/side-effects SLA и ограничения для code review. |
 | Эволюция к v0.4+ | `Next` | Потребность в migration playbook и ADR/DoD для следующих слоев зафиксирована. | Набор миграционных сценариев без перепрошивки базовых интерфейсов. |
@@ -79,7 +79,7 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 1. `Done` Контракты модулей и каталог ошибок.
 2. `Done` Транзакционная модель памяти.
 3. `Done` Explainability / audit trail.
-4. `Done` Regression gate для порогов и drift-контроль: platform-neutral launcher добавлен (`scripts/regression_gate.sh` + `scripts/regression_gate.ps1`), CI job `regression-gate` подключена.
+4. `Done` Regression gate для порогов и drift-контроль: platform-neutral launcher добавлен (`Source/Tests/scripts/regression_gate.sh` + `Source/Tests/scripts/regression_gate.ps1`), CI job `regression-gate` подключена.
 5. `In Progress` Privacy/Security baseline (`PII/NON_PII`, retention, deletion).
 6. `Next` SLA-границы C++/Blueprint и профили производительности.
 7. `Next` Migration path для v0.4+ (`ADR`, `DoD`, `playbook`).
@@ -107,14 +107,14 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 - [x] Ambiguous-trace на уровне каждого `AmbiguousToken`.
 - [x] Memory pressure degradation (`Medium/High/Critical`) с проверяемыми гарантиями.
 - [x] Full fail-reason pipeline от синтаксиса до ответа.
-- [x] Threshold regression fixtures и gate-тест `ThresholdRegressionGateTests.cpp` подключены; operational launcher вынесен в `scripts/regression_gate.sh` и `scripts/regression_gate.ps1` с одинаковой gate-policy.
+- [x] Threshold regression fixtures и gate-тест `ThresholdRegressionGateTests.cpp` подключены; operational launcher вынесен в `Source/Tests/scripts/regression_gate.sh` и `Source/Tests/scripts/regression_gate.ps1` с одинаковой gate-policy.
 
 <a id="regression-gate"></a>
 ### 4.2) Локальный/CI запуск regression gate
 
-- Unix-like окружение: `bash scripts/regression_gate.sh` (или `make -C Source/Tests regression-gate`).
-- Windows PowerShell: `.\scripts\regression_gate.ps1`.
-- CI: workflow `.github/workflows/regression-gate.yml` запускает launcher и должен быть помечен как required merge check (`regression-gate (linux)` и/или `regression-gate (windows)`).
+- Unix-like окружение: `bash Source/Tests/scripts/regression_gate.sh` (или `make -C Source/Tests regression-gate`).
+- Windows PowerShell: `.\Source\Tests\scripts\regression_gate.ps1`.
+- CI: workflow `.github/workflows/regression-gate.yml` запускает launcher из `Source/Tests/scripts/` и помечается как required merge check (`regression-gate (linux)` и/или `regression-gate (windows)`). После подтверждённого зелёного прогона в CI operational-пункт по launcher считается `Done`.
 - Policy: любое изменение `RegressionThresholds.cfg` требует успешного прогона regression gate на фиксированном RU/EN наборе.
 
 ### 4.3) Privacy/Security baseline — owner запись
