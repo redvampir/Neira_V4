@@ -3,6 +3,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -Wno-unused-parameter \
             -I. \
             -I../NeiraCore/Public \
             -I../NeiraTests/Private
+LDFLAGS  := -lsqlite3
 
 CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FIntentExtractor.cpp \
@@ -14,7 +15,8 @@ CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FMemoryPressurePolicy.cpp \
             ../NeiraCore/Private/FOfflineVoiceAdapters.cpp \
             ../NeiraCore/Private/FVoiceSessionOrchestrator.cpp \
-            ../NeiraCore/Private/FResponseGenerator.cpp
+            ../NeiraCore/Private/FResponseGenerator.cpp \
+            ../NeiraCore/Private/FSemanticGraph.cpp
 
 TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/IntentExtractorTests.cpp \
@@ -29,7 +31,8 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/DoDIntegrationTests.cpp \
             ../NeiraTests/Private/VoiceSessionOrchestratorSmokeTests.cpp \
             ../NeiraTests/Private/ResponseGeneratorTests.cpp \
-            ../NeiraTests/Private/VoiceFixtureMetricsTests.cpp
+            ../NeiraTests/Private/VoiceFixtureMetricsTests.cpp \
+            ../NeiraTests/Private/SemanticGraphTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
@@ -38,7 +41,7 @@ ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 all: neira_tests
 
 neira_tests: $(ALL_SRC) ue_compat.h test_runner.h
-	$(CXX) $(CXXFLAGS) $(ALL_SRC) -o neira_tests
+	$(CXX) $(CXXFLAGS) $(ALL_SRC) -o neira_tests $(LDFLAGS)
 
 run: neira_tests
 	./neira_tests
