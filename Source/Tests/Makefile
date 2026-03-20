@@ -62,9 +62,7 @@ run: neira_tests
 
 regression-gate: neira_tests
 	# Merge-blocking gate for threshold/fixtures changes: fail only on metric regressions.
-	bash -o pipefail -c "./neira_tests | tee regression_gate.log || true"
-	bash -o pipefail -c "grep -Eq '^  (PASS|FAIL)  Neira\\.RegressionGate\\.' regression_gate.log || echo '[regression-gate] WARNING: no executable Neira.RegressionGate.* tests found in binary'"
-	! grep -Eq '^  FAIL  Neira\\.RegressionGate\\.' regression_gate.log
+	bash ../../scripts/regression_gate.sh
 
 mode-matrix:
 	@echo "Mode              Scope                                      Expected outcome                               Return code"
