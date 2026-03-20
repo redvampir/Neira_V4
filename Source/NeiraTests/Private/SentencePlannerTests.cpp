@@ -41,7 +41,8 @@ bool FSentencePlanner_GetDefinition_Unknown_ReturnsUncertaintyPhrase::RunTest(co
         TEXT("нейросинтаксема"), TEXT(""), 0);
 
     TestFalse(TEXT("Результат не пустой"), Result.IsEmpty());
-    TestTrue(TEXT("Содержит субъект"), Result.Contains(TEXT("нейросинтаксема")));
+    TestTrue(TEXT("Содержит субъект (в базовой или согласованной форме)"),
+             Result.Contains(TEXT("нейросинтаксема")) || Result.Contains(TEXT("нейросинтаксеме")));
     // Не должно быть объекта-пустышки
     TestFalse(TEXT("Нет данных недостаточно"), Result.Contains(TEXT("данных недостаточно")));
     return true;
@@ -75,6 +76,67 @@ bool FSentencePlanner_StoreFact_ReturnsAcknowledgement::RunTest(const FString& P
 // ---------------------------------------------------------------------------
 // Ротация: разные hints дают разные варианты
 // ---------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSentencePlanner_GetDefinition_PrepositionalAgreement,
+    "Neira.SentencePlanner.Agreement.GetDefinition_Prepositional",
+    NEIRA_TEST_FLAGS)
+bool FSentencePlanner_GetDefinition_PrepositionalAgreement::RunTest(const FString& Parameters)
+{
+    FSentencePlanner Planner;
+    const FString Result = Planner.Plan(
+        EIntentID::GetDefinition, EConfidenceLevel::Unknown, EResponseTone::Calm,
+        TEXT("машина"), TEXT(""), 0);
+
+    TestTrue(TEXT("Prepositional для женского рода: о машине"), Result.Contains(TEXT("О машине")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSentencePlanner_AnswerAbility_InstrumentalAgreement,
+    "Neira.SentencePlanner.Agreement.AnswerAbility_Instrumental",
+    NEIRA_TEST_FLAGS)
+bool FSentencePlanner_AnswerAbility_InstrumentalAgreement::RunTest(const FString& Parameters)
+{
+    FSentencePlanner Planner;
+    const FString Result = Planner.Plan(
+        EIntentID::AnswerAbility, EConfidenceLevel::Verified, EResponseTone::Calm,
+        TEXT("текст"), TEXT(""), 0);
+
+    TestTrue(TEXT("Instrumental для мужского рода: с текстом"), Result.Contains(TEXT("с текстом")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSentencePlanner_StoreFact_ContainsEntityTarget,
+    "Neira.SentencePlanner.Agreement.StoreFact_ContainsEntityTarget",
+    NEIRA_TEST_FLAGS)
+bool FSentencePlanner_StoreFact_ContainsEntityTarget::RunTest(const FString& Parameters)
+{
+    FSentencePlanner Planner;
+    const FString Result = Planner.Plan(
+        EIntentID::StoreFact, EConfidenceLevel::Uncertain, EResponseTone::Calm,
+        TEXT("нейрон"), TEXT(""), 0);
+
+    TestTrue(TEXT("StoreFact теперь включает EntityTarget"), Result.Contains(TEXT("нейрон")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FSentencePlanner_Agreement_FallbackForMultiwordEntity,
+    "Neira.SentencePlanner.Agreement.FallbackForMultiwordEntity",
+    NEIRA_TEST_FLAGS)
+bool FSentencePlanner_Agreement_FallbackForMultiwordEntity::RunTest(const FString& Parameters)
+{
+    FSentencePlanner Planner;
+    const FString Result = Planner.Plan(
+        EIntentID::AnswerAbility, EConfidenceLevel::Verified, EResponseTone::Calm,
+        TEXT("база данных"), TEXT(""), 0);
+
+    TestTrue(TEXT("Для многословного терма включается безопасный fallback с кавычками"),
+             Result.Contains(TEXT("с «база данных»")));
+    return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FSentencePlanner_Rotation_ChangesPhraseVariant,
     "Neira.SentencePlanner.Rotation.ChangesPhraseVariant",
@@ -179,7 +241,7 @@ bool FSentencePlanner_AllMainIntents_HaveAtLeastOneStrategy::RunTest(const FStri
 }
 
 // ---------------------------------------------------------------------------
-// Fill: плейсхолдеры {Subject} и {Object} заменяются корректно
+// Fill: плейсхолдеры {SubjectNom}/{Object} заменяются корректно
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FSentencePlanner_Fill_ReplacesSubjectAndObject,
@@ -196,7 +258,7 @@ bool FSentencePlanner_Fill_ReplacesSubjectAndObject::RunTest(const FString& Para
 
     TestTrue(TEXT("Subject заменён"), Result.Contains(TEXT("берёза")));
     TestTrue(TEXT("Object заменён"),  Result.Contains(TEXT("дерево")));
-    TestFalse(TEXT("Плейсхолдер {Subject} удалён"), Result.Contains(TEXT("{Subject}")));
+    TestFalse(TEXT("Плейсхолдер {SubjectNom} удалён"), Result.Contains(TEXT("{SubjectNom}")));
     TestFalse(TEXT("Плейсхолдер {Object} удалён"),  Result.Contains(TEXT("{Object}")));
     return true;
 }

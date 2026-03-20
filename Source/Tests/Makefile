@@ -15,6 +15,7 @@ CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FMemoryPressurePolicy.cpp \
             ../NeiraCore/Private/FOfflineVoiceAdapters.cpp \
             ../NeiraCore/Private/FVoiceSessionOrchestrator.cpp \
+            ../NeiraCore/Private/FMorphAgreement.cpp \
             ../NeiraCore/Private/FSentencePlanner.cpp \
             ../NeiraCore/Private/FResponseGenerator.cpp \
             ../NeiraCore/Private/FSemanticGraph.cpp \
@@ -32,6 +33,7 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/MemoryPressurePolicyTests.cpp \
             ../NeiraTests/Private/DoDIntegrationTests.cpp \
             ../NeiraTests/Private/VoiceSessionOrchestratorSmokeTests.cpp \
+            ../NeiraTests/Private/MorphAgreementTests.cpp \
             ../NeiraTests/Private/SentencePlannerTests.cpp \
             ../NeiraTests/Private/ResponseGeneratorTests.cpp \
             ../NeiraTests/Private/VoiceFixtureMetricsTests.cpp \

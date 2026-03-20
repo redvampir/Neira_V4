@@ -103,12 +103,38 @@ StrategyIndex = Hash(LastUsedStrategy, TopicContext, SessionCount) % AvailableSt
 
 ---
 
-## Компонент 3: FMorphRealizer
+## Компонент 3: FMorphRealizer / FMorphAgreement (текущая реализация)
 
-**Что это:** согласование слов по правилам русской грамматики.
+**Что это:** слой согласования словоформ для `EntityTarget` перед финальной подстановкой в шаблон.
 
-Принимает абстрактное дерево вида `{Subject(nom) + Predicate(3sg,pres) + Object(inst)}`,
-возвращает конкретные словоформы.
+На текущем этапе в коде используется `FMorphAgreement` (эвристический realizer):
+- вход: `EntityTarget` (сырой `FString`);
+- выход: `FEntityTargetForms { Nominative, Prepositional, Instrumental, bUsedFallback }`;
+- потребитель: ключевые шаблоны `FSentencePlanner` (`GetDefinition`, `StoreFact`, `AnswerAbility`).
+
+### Контракт Realizer-слоя (I/O)
+
+```cpp
+struct FEntityTargetForms
+{
+    FString Nominative;     // Базовая форма (обычно исходный таргет)
+    FString Prepositional;  // Для шаблонов с "о ..."
+    FString Instrumental;   // Для шаблонов с "с ..."
+    bool    bUsedFallback;  // true, если точное склонение не удалось
+};
+
+FEntityTargetForms FMorphAgreement::BuildEntityTargetForms(const FString& RawEntityTarget);
+```
+
+**Правила fallback:**
+1. Пустой таргет -> пустые формы без модификации.
+2. Многословный/сложный таргет -> безопасная форма в кавычках (`«... »`) для `Prepositional`/`Instrumental`.
+3. Неопознанное окончание -> fallback в кавычках и `bUsedFallback=true`.
+
+**Гарантии:**
+- Выход детерминирован при одинаковом входе.
+- Realizer не меняет семантическое ядро, только surface form.
+- Ошибка согласования не ломает генерацию: есть рабочий текст через fallback.
 
 **Ключевые задачи для русского:**
 
@@ -121,9 +147,8 @@ StrategyIndex = Hash(LastUsedStrategy, TopicContext, SessionCount) % AvailableSt
 | Одушевлённость | вин.пад. одушевлённых = род.пад. |
 
 **Связь с FMorphAnalyzer:**
-FMorphAnalyzer уже умеет разбирать словоформу → лемму + теги.
-FMorphRealizer — обратная задача: лемма + теги → словоформа.
-Это означает: словарные данные уже есть, нужна обратная функция поиска.
+`FMorphAnalyzer` по-прежнему отвечает за анализ и словарь; `FMorphAgreement` — минимальный runtime-realizer для шаблонов NLG.
+Полноценный `FMorphRealizer` (обратный генератор от леммы+тегов) остаётся следующей фазой.
 
 ---
 
