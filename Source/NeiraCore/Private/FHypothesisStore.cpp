@@ -29,21 +29,25 @@
 
 int32 FHypothesisStore::Store(const FHypothesis& Hypothesis)
 {
+    if (!CanStoreHypothesis(Hypothesis))
+        return -1;
+
     FHypothesis Stored    = Hypothesis;
     Stored.State          = EKnowledgeState::Pending;  // инвариант
     Stored.ConfirmCount   = 0;                          // инвариант v0.2
     Stored.Reason         = TEXT("создана");
+    Stored.CreatedSeq     = NextSequence();
+    Stored.UpdatedSeq     = Stored.CreatedSeq;
 
     int32 ID = Hypotheses.Num();
     Hypotheses.Add(MoveTemp(Stored));
 
-    FHypothesisEvent Ev;
-    Ev.HypothesisID = ID;
-    Ev.FromState    = EKnowledgeState::Pending;  // начальное состояние
-    Ev.ToState      = EKnowledgeState::Pending;
-    Ev.MethodName   = TEXT("Store");
-    Ev.Reason       = TEXT("создана");
-    EventLog.Add(MoveTemp(Ev));
+    AppendEvent(ID,
+                EKnowledgeState::Pending,
+                EKnowledgeState::Pending,
+                TEXT("Store"),
+                TEXT("создана"),
+                Hypotheses[ID].DataClass);
 
     return ID;
 }
@@ -71,14 +75,10 @@ bool FHypothesisStore::Confirm(int32 HypothesisID, const FString& Reason)
     H.ConfirmCount++;
     H.State  = EKnowledgeState::Confirmed;
     H.Reason = Reason;
+    H.UpdatedSeq = NextSequence();
 
-    FHypothesisEvent Ev;
-    Ev.HypothesisID = HypothesisID;
-    Ev.FromState    = PrevState;
-    Ev.ToState      = EKnowledgeState::Confirmed;
-    Ev.MethodName   = TEXT("Confirm");
-    Ev.Reason       = Reason;
-    EventLog.Add(MoveTemp(Ev));
+    AppendEvent(HypothesisID, PrevState, EKnowledgeState::Confirmed,
+                TEXT("Confirm"), Reason, H.DataClass);
 
     return true;
 }
@@ -99,14 +99,11 @@ bool FHypothesisStore::Verify(int32 HypothesisID, const FString& Reason)
 
     H.State  = EKnowledgeState::VerifiedKnowledge;
     H.Reason = Reason;
+    H.UpdatedSeq = NextSequence();
 
-    FHypothesisEvent Ev;
-    Ev.HypothesisID = HypothesisID;
-    Ev.FromState    = EKnowledgeState::Confirmed;
-    Ev.ToState      = EKnowledgeState::VerifiedKnowledge;
-    Ev.MethodName   = TEXT("Verify");
-    Ev.Reason       = Reason;
-    EventLog.Add(MoveTemp(Ev));
+    AppendEvent(HypothesisID, EKnowledgeState::Confirmed,
+                EKnowledgeState::VerifiedKnowledge,
+                TEXT("Verify"), Reason, H.DataClass);
 
     return true;
 }
@@ -120,14 +117,10 @@ bool FHypothesisStore::MarkConflicted(int32 HypothesisID, const FString& Reason)
     EKnowledgeState PrevState = H.State;
     H.State  = EKnowledgeState::Conflicted;
     H.Reason = Reason;
+    H.UpdatedSeq = NextSequence();
 
-    FHypothesisEvent Ev;
-    Ev.HypothesisID = HypothesisID;
-    Ev.FromState    = PrevState;
-    Ev.ToState      = EKnowledgeState::Conflicted;
-    Ev.MethodName   = TEXT("MarkConflicted");
-    Ev.Reason       = Reason;
-    EventLog.Add(MoveTemp(Ev));
+    AppendEvent(HypothesisID, PrevState, EKnowledgeState::Conflicted,
+                TEXT("MarkConflicted"), Reason, H.DataClass);
 
     return true;
 }
@@ -157,14 +150,10 @@ bool FHypothesisStore::Downgrade(int32 HypothesisID, const FString& Reason)
 
     H.State  = NextState;
     H.Reason = Reason;
+    H.UpdatedSeq = NextSequence();
 
-    FHypothesisEvent Ev;
-    Ev.HypothesisID = HypothesisID;
-    Ev.FromState    = PrevState;
-    Ev.ToState      = NextState;
-    Ev.MethodName   = TEXT("Downgrade");
-    Ev.Reason       = Reason;
-    EventLog.Add(MoveTemp(Ev));
+    AppendEvent(HypothesisID, PrevState, NextState,
+                TEXT("Downgrade"), Reason, H.DataClass);
 
     return true;
 }
@@ -202,4 +191,71 @@ const TArray<FHypothesisEvent>& FHypothesisStore::GetEventLog() const
 void FHypothesisStore::ClearEventLog()
 {
     EventLog.Reset();
+}
+
+void FHypothesisStore::SetRetentionPolicy(const FDataRetentionPolicy& InPolicy)
+{
+    RetentionPolicy = InPolicy;
+}
+
+int32 FHypothesisStore::PurgeExpired()
+{
+    const int64 CurrentSeq = NextSequence();
+    int32 Purged = 0;
+
+    for (int32 i = 0; i < Hypotheses.Num(); ++i)
+    {
+        FHypothesis& H = Hypotheses[i];
+        if (H.State == EKnowledgeState::Deprecated)
+            continue;
+
+        const int64 MaxAge = (H.DataClass == EDataClassification::PII)
+            ? RetentionPolicy.PIIRetentionOps
+            : RetentionPolicy.NonPIIRetentionOps;
+
+        if (CurrentSeq - H.UpdatedSeq <= MaxAge)
+            continue;
+
+        const EKnowledgeState PrevState = H.State;
+        H.Claim = TEXT("");
+        H.Source = TEXT("");
+        H.Reason = TEXT("retention purge");
+        H.Confidence = 0.0f;
+        H.ConfirmCount = 0;
+        H.State = EKnowledgeState::Deprecated;
+        H.UpdatedSeq = CurrentSeq;
+
+        AppendEvent(i, PrevState, EKnowledgeState::Deprecated,
+                    TEXT("RetentionPurge"), TEXT("данные очищены по retention"), H.DataClass);
+        ++Purged;
+    }
+
+    return Purged;
+}
+
+bool FHypothesisStore::CanStoreHypothesis(const FHypothesis& Hypothesis)
+{
+    return Hypothesis.DataClass != EDataClassification::PII || Hypothesis.bPIIAllowed;
+}
+
+int64 FHypothesisStore::NextSequence()
+{
+    return ++SequenceCounter;
+}
+
+void FHypothesisStore::AppendEvent(int32 HypothesisID,
+                                   EKnowledgeState FromState,
+                                   EKnowledgeState ToState,
+                                   const FString& MethodName,
+                                   const FString& Reason,
+                                   EDataClassification DataClass)
+{
+    FHypothesisEvent Ev;
+    Ev.HypothesisID = HypothesisID;
+    Ev.FromState    = FromState;
+    Ev.ToState      = ToState;
+    Ev.MethodName   = MethodName;
+    Ev.Reason       = Reason;
+    Ev.DataClass    = DataClass;
+    EventLog.Add(MoveTemp(Ev));
 }

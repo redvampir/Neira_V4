@@ -518,4 +518,70 @@ bool FHypothesisStore_FindByClaim_ReturnsMinusOne_IfNotFound::RunTest(const FStr
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Privacy & retention policy (v0.6)
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Privacy_PIIBlockedWithoutExplicitPermission,
+    "Neira.HypothesisStore.Privacy.PIIBlockedWithoutExplicitPermission",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Privacy_PIIBlockedWithoutExplicitPermission::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FHypothesis H;
+    H.Claim       = TEXT("Телефон пользователя: +7 999 123 45 67");
+    H.DataClass   = EDataClassification::PII;
+    H.bPIIAllowed = false; // явного разрешения нет
+
+    const int32 ID = Store.Store(H);
+    TestEqual(TEXT("PII без явного разрешения не сохраняется"), ID, -1);
+    TestEqual(TEXT("Store.Count остаётся 0"), Store.Count(), 0);
+    TestEqual(TEXT("EventLog не пополняется"), Store.GetEventLog().Num(), 0);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FHypothesisStore_Retention_PurgeMarksExpiredAsDeprecated,
+    "Neira.HypothesisStore.Retention.PurgeMarksExpiredAsDeprecated",
+    NEIRA_TEST_FLAGS)
+bool FHypothesisStore_Retention_PurgeMarksExpiredAsDeprecated::RunTest(const FString& Parameters)
+{
+    FHypothesisStore Store;
+    FDataRetentionPolicy Policy;
+    Policy.PIIRetentionOps = 1;
+    Policy.NonPIIRetentionOps = 1000;
+    Store.SetRetentionPolicy(Policy);
+
+    FHypothesis PII;
+    PII.Claim       = TEXT("email: user@example.com");
+    PII.Source      = TEXT("manual");
+    PII.DataClass   = EDataClassification::PII;
+    PII.bPIIAllowed = true;
+
+    const int32 ID = Store.Store(PII);
+    TestTrue(TEXT("PII с разрешением сохраняется"), ID >= 0);
+
+    // Делаем запись старой относительно короткого retention окна.
+    FHypothesis NonPII;
+    NonPII.Claim = TEXT("кошка — животное");
+    Store.Store(NonPII);
+    Store.Store(NonPII);
+
+    const int32 Purged = Store.PurgeExpired();
+    TestEqual(TEXT("Очищена ровно 1 PII-запись"), Purged, 1);
+
+    const FHypothesis* PurgedH = Store.Find(ID);
+    TestNotNull(TEXT("Очищенная запись доступна по ID"), PurgedH);
+    TestEqual(TEXT("Статус очищенной записи = Deprecated"),
+              PurgedH->State, EKnowledgeState::Deprecated);
+    TestTrue(TEXT("Claim очищен"), PurgedH->Claim.IsEmpty());
+    TestTrue(TEXT("Source очищен"), PurgedH->Source.IsEmpty());
+    const auto& Log = Store.GetEventLog();
+    TestTrue(TEXT("EventLog не пустой"), Log.Num() > 0);
+    TestEqual(TEXT("Последнее событие лога — RetentionPurge"),
+              Log[Log.Num() - 1].MethodName, FString(TEXT("RetentionPurge")));
+    return true;
+}
+
 #undef NEIRA_TEST_FLAGS

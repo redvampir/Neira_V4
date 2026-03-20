@@ -67,7 +67,7 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 | Память и транзакционность | `Done` | `FHypothesisEvent` append-only, успешные переходы пишутся в `EventLog`, negative cases покрыты тестами. | Replay/idempotency как следующий уровень зрелости. |
 | Explainability и аудит | `Done` | `DecisionTrace` и `EventLog` дают базовую объяснимость по intent и knowledge transitions. | Полный forensic dump и trace-id через весь pipeline. |
 | Drift/калибровка порогов | `Done` | Threshold fixtures и gate-тесты подключены; `scripts/regression_gate.sh` и `scripts/regression_gate.ps1` повторяют policy: suite-fail игнорируется, merge блокируется только на `FAIL Neira.RegressionGate.*`. | CI workflow `regression-gate` добавлен как merge-blocking job (required check на стороне branch protection). |
-| Security/Privacy baseline | `Next` | Зафиксирована минимальная классификация `PII/NON_PII` и owner-решения по данным. | Retention/deletion policy, правила доступа, минимальные требования к защите данных. |
+| Security/Privacy baseline | `In Progress` | Добавлен policy-док `Data_Classification_and_Retention.md`; в `FHypothesisStore` включены PII guard (без explicit allow запись блокируется) и retention purge с `RetentionPurge` в event-log; добавлены минимальные тесты. | Довести policy до сквозного runtime-логирования (DecisionTrace/Console logs) и формализовать access-control слой. |
 | C++ vs Blueprint SLA-границы | `Next` | Функциональная граница описана, необходимость нефункциональных контрактов зафиксирована. | Документированные latency/threading/side-effects SLA и ограничения для code review. |
 | Эволюция к v0.4+ | `Next` | Потребность в migration playbook и ADR/DoD для следующих слоев зафиксирована. | Набор миграционных сценариев без перепрошивки базовых интерфейсов. |
 
@@ -80,7 +80,7 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 2. `Done` Транзакционная модель памяти.
 3. `Done` Explainability / audit trail.
 4. `Done` Regression gate для порогов и drift-контроль: platform-neutral launcher добавлен (`scripts/regression_gate.sh` + `scripts/regression_gate.ps1`), CI job `regression-gate` подключена.
-5. `Next` Privacy/Security baseline (`PII/NON_PII`, retention, deletion).
+5. `In Progress` Privacy/Security baseline (`PII/NON_PII`, retention, deletion).
 6. `Next` SLA-границы C++/Blueprint и профили производительности.
 7. `Next` Migration path для v0.4+ (`ADR`, `DoD`, `playbook`).
 
@@ -116,6 +116,16 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 - Windows PowerShell: `.\scripts\regression_gate.ps1`.
 - CI: workflow `.github/workflows/regression-gate.yml` запускает launcher и должен быть помечен как required merge check (`regression-gate (linux)` и/или `regression-gate (windows)`).
 - Policy: любое изменение `RegressionThresholds.cfg` требует успешного прогона regression gate на фиксированном RU/EN наборе.
+
+### 4.3) Privacy/Security baseline — owner запись
+
+- **Owner:** Core Platform / Knowledge Pipeline
+- **Плановая дата фиксации v0.6-min:** 2026-03-20
+- **DoD-критерии (минимум):**
+  - [x] Отдельный policy-док с `PII/NON_PII`, retention и deletion.
+  - [x] Точки применения policy описаны и заведены в pipeline (`Store`, `EventLog`, `BeliefEngine` rejection reason).
+  - [x] Есть минимальные автоматические проверки: блокировка PII без явного разрешения + очистка по retention.
+  - [ ] Следующий шаг: добавить централизованный access-control и masking в пользовательских логах/трейсах.
 
 ---
 
@@ -157,7 +167,8 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 - `Done` Для `Neira.MorphAnalyzer.ExternalDictionary.AutoLoadAndLookup` добавлен репозиторный fixture `Data/Dictionaries/opencorpora_dict.json`; тест больше не опирается на локальный внешний файл разработчика.
 - `Done` Локальный нативный тестовый раннер на 2026-03-20 дает `146/146 PASS` (NeiraDialog snapshot), нативный Linux runner — `199/200 PASS`.
 - `Done` v0.5 NLG: `FSentencePlanner` с библиотекой ~55 стратегий; `FResponseGenerator` переведён на натуральный язык; детерминированная ротация; 8 новых тестов `SentencePlannerTests.cpp`.
-- `Next` Следующий этап: `FMorphRealizer` (падежное согласование, фаза 2 NLG) и/или Privacy/Security baseline.
+- `In Progress` Privacy/Security baseline v0.6-min: опубликован policy-док `Docs/Policies/Data_Classification_and_Retention.md`, добавлены PII guard и retention purge в `FHypothesisStore`, покрыто минимальными privacy/retention тестами.
+- `Next` Следующий этап: `FMorphRealizer` (падежное согласование, фаза 2 NLG) и hardening Privacy/Security baseline (access-control + masking).
 
 ---
 
