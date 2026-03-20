@@ -31,6 +31,7 @@
 
 - v0.1-v0.4 реализованы в коде и подтверждаются локальным нативным тестовым раннером.
 - Встроенный словарь runtime-интегрирован; OpenCorpora тоже встроен в runtime-path `FMorphAnalyzer` через внешний JSON-словарь, shared cache и lazy-load policy с size guard.
+- `NeiraDialog` получил P0 meta-dialog routing для greeting/self-description/capability/courtesy/farewell сценариев и более естественный fallback без debug-profile блока в обычном режиме.
 - `ThresholdRegressionGateTests.cpp`, `MemoryPressurePolicyTests.cpp` и `DoDIntegrationTests.cpp` подключены в `Source/Tests/Makefile`.
 - Merge-blocking workflow `regression-gate` остается операционно незавершенным: обертка есть, но ее канонический запуск зависит от наличия GNU `make`.
 - Следующий этап: Privacy/Security baseline -> SLA C++/Blueprint -> migration playbook для v0.4+.

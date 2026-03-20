@@ -12,15 +12,122 @@
 #include "../NeiraCore/Public/FPhraseClassifier.h"
 #include "../NeiraCore/Public/FIntentExtractor.h"
 #include "../NeiraCore/Public/FActionRegistry.h"
-#include "../NeiraCore/Public/FResponseGenerator.h"
 #include "../NeiraCore/Public/FHypothesisStore.h"
 #include "../NeiraCore/Public/FBeliefEngine.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+#include <clocale>
 #include <iostream>
 #include <string>
 
 namespace
 {
+void InitializeUtf8Console()
+{
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+
+    if (std::setlocale(LC_ALL, ".UTF-8") == nullptr)
+    {
+        std::setlocale(LC_ALL, ".65001");
+    }
+}
+
+#ifdef _WIN32
+std::string WideToUtf8(const std::wstring& Value)
+{
+    if (Value.empty())
+        return std::string();
+
+    const int Required = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        Value.data(),
+        static_cast<int>(Value.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr
+    );
+
+    if (Required <= 0)
+        return std::string();
+
+    std::string Result(static_cast<size_t>(Required), '\0');
+    const int Written = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        Value.data(),
+        static_cast<int>(Value.size()),
+        Result.data(),
+        Required,
+        nullptr,
+        nullptr
+    );
+
+    return (Written > 0) ? Result : std::string();
+}
+#endif
+
+bool ReadInputLine(std::string& OutLine)
+{
+#ifdef _WIN32
+    HANDLE InputHandle = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD ConsoleMode = 0;
+
+    if (InputHandle != nullptr
+        && InputHandle != INVALID_HANDLE_VALUE
+        && GetConsoleMode(InputHandle, &ConsoleMode))
+    {
+        std::wstring WideLine;
+        WideLine.reserve(128);
+
+        while (true)
+        {
+            wchar_t Buffer[128] = {};
+            DWORD CharsRead = 0;
+            if (!ReadConsoleW(InputHandle, Buffer, 127, &CharsRead, nullptr))
+                return false;
+            if (CharsRead == 0)
+                return false;
+
+            WideLine.append(Buffer, Buffer + CharsRead);
+
+            if (WideLine.find(L'\n') != std::wstring::npos)
+                break;
+        }
+
+        while (!WideLine.empty() && (WideLine.back() == L'\n' || WideLine.back() == L'\r'))
+            WideLine.pop_back();
+
+        OutLine = WideToUtf8(WideLine);
+        return true;
+    }
+#endif
+
+    return static_cast<bool>(std::getline(std::cin, OutLine));
+}
+
+enum class EDialogTurnKind : uint8
+{
+    None,
+    Greeting,
+    CapabilityOverview,
+    CapabilityLimitations,
+    SelfDescription,
+    Courtesy,
+    Farewell,
+    Memory,
+    Knowledge,
+    Fallback,
+};
+
 struct FDialogSession
 {
     FPhraseClassifier Classifier;
@@ -28,7 +135,11 @@ struct FDialogSession
     FHypothesisStore MemoryStore;
     TArray<FString> UserHistory;
     int32 LastStoredHypothesisID = INDEX_NONE;
+    EDialogTurnKind LastAgentTurnKind = EDialogTurnKind::None;
+    FString LastAgentTopic;
 };
+
+void RememberUserTurn(FDialogSession& Session, const FString& Input, EIntentID IntentID);
 
 FString PhraseTypeToString(EPhraseType Type)
 {
@@ -121,6 +232,211 @@ bool IsVisualAction(const FString& ActionLower)
         || ActionLower.Contains(TEXT("изображ"));
 }
 
+bool IsGreetingInput(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("привет"))
+        || LowerInput.Contains(TEXT("здравств"))
+        || LowerInput.Contains(TEXT("добрый день"))
+        || LowerInput.Contains(TEXT("добрый вечер"))
+        || LowerInput.Contains(TEXT("доброе утро"))
+        || LowerInput == TEXT("hello")
+        || LowerInput.StartsWith(TEXT("hi"));
+}
+
+bool HasHowAreYouPrompt(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("как дела"))
+        || LowerInput.Contains(TEXT("как у тебя дела"))
+        || LowerInput.Contains(TEXT("как ты"));
+}
+
+bool IsSelfDescriptionQuery(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("кто ты"))
+        || LowerInput.Contains(TEXT("ты кто"))
+        || LowerInput.Contains(TEXT("что ты такое"))
+        || LowerInput.Contains(TEXT("расскажи о себе"))
+        || LowerInput.Contains(TEXT("что ты за"));
+}
+
+bool IsCapabilityOverviewQuery(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("что ты умеешь"))
+        || LowerInput.Contains(TEXT("что умеешь"))
+        || LowerInput.Contains(TEXT("что ты можешь"))
+        || LowerInput.Contains(TEXT("какие у тебя возможности"))
+        || LowerInput.Contains(TEXT("на что ты способна"))
+        || LowerInput.Contains(TEXT("расскажи мне что ты умеешь"))
+        || LowerInput.Contains(TEXT("расскажи, что ты умеешь"))
+        || LowerInput.Contains(TEXT("расскажи что ты умеешь"));
+}
+
+bool IsCapabilityStrengthQuery(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("лучше всего"))
+        || LowerInput.Contains(TEXT("лучше умеешь"))
+        || LowerInput.Contains(TEXT("сильнее всего"))
+        || LowerInput.Contains(TEXT("лучше всего умеешь"));
+}
+
+bool IsCapabilityLimitationPrompt(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("мало"))
+        || LowerInput.Contains(TEXT("огранич"))
+        || LowerInput.Contains(TEXT("пока слабо"))
+        || LowerInput.Contains(TEXT("слабо умеешь"))
+        || LowerInput.Contains(TEXT("не очень умеешь"));
+}
+
+bool IsThanksInput(const FString& LowerInput)
+{
+    return LowerInput.Contains(TEXT("спасибо"))
+        || LowerInput.Contains(TEXT("благодарю"))
+        || LowerInput == TEXT("thx")
+        || LowerInput == TEXT("thanks");
+}
+
+bool IsFarewellInput(const FString& LowerInput)
+{
+    return LowerInput == TEXT("пока")
+        || LowerInput.Contains(TEXT("до свид"))
+        || LowerInput.Contains(TEXT("увидимся"))
+        || LowerInput == TEXT("bye");
+}
+
+bool IsFollowupCue(const FString& LowerInput)
+{
+    return LowerInput.StartsWith(TEXT("то есть"))
+        || LowerInput.StartsWith(TEXT("понятно"))
+        || LowerInput.StartsWith(TEXT("ясно"))
+        || LowerInput.StartsWith(TEXT("а "))
+        || LowerInput.StartsWith(TEXT("и "))
+        || LowerInput.StartsWith(TEXT("ну "));
+}
+
+void RememberAgentReply(FDialogSession& Session, EDialogTurnKind Kind, const FString& Topic = FString())
+{
+    Session.LastAgentTurnKind = Kind;
+    Session.LastAgentTopic = Topic.TrimStartAndEnd();
+}
+
+FString BuildCapabilityOverviewResponse()
+{
+    return TEXT("Сейчас лучше всего у меня работают простые вопросы о словах, память текущей сессии и базовый разбор фразы. Я могу запомнить факт, потом его вспомнить и честно сказать, если не уверена.");
+}
+
+FString BuildCapabilityStrengthResponse()
+{
+    return TEXT("Лучше всего сейчас работают простые формулировки, запоминание фактов в рамках этой сессии и ответы по уже сохранённой памяти.");
+}
+
+FString BuildCapabilityLimitationsResponse()
+{
+    return TEXT("Да, пока возможности ограничены. Хуже всего у меня сейчас свободный small-talk, длинные уточняющие диалоги и энциклопедические ответы без заранее сохранённого факта.");
+}
+
+FString BuildSelfDescriptionResponse()
+{
+    return TEXT("Я Нейра: экспериментальное текстовое ядро на C++ с rule-based разбором и памятью текущей сессии. Сейчас я ближе к исследовательскому агенту, чем к полноценному собеседнику-энциклопедии.");
+}
+
+bool TryHandleDialogShortcut(FDialogSession& Session, const FString& TrimmedInput, const FString& LowerInput, FString& OutResponse)
+{
+    if (IsGreetingInput(LowerInput))
+    {
+        RememberUserTurn(Session, TrimmedInput, EIntentID::Unknown);
+
+        if (HasHowAreYouPrompt(LowerInput))
+        {
+            OutResponse = TEXT("Привет. Работаю нормально. Готова разбирать фразы, запоминать факты и отвечать по памяти сессии.");
+        }
+        else
+        {
+            OutResponse = TEXT("Привет. Готова к диалогу.");
+        }
+
+        RememberAgentReply(Session, EDialogTurnKind::Greeting);
+        return true;
+    }
+
+    if (IsThanksInput(LowerInput))
+    {
+        RememberUserTurn(Session, TrimmedInput, EIntentID::Unknown);
+        OutResponse = TEXT("Пожалуйста. Если хотите, могу рассказать о своих возможностях или попробовать разобрать следующую фразу.");
+        RememberAgentReply(Session, EDialogTurnKind::Courtesy);
+        return true;
+    }
+
+    if (IsFarewellInput(LowerInput))
+    {
+        RememberUserTurn(Session, TrimmedInput, EIntentID::Unknown);
+        OutResponse = TEXT("До встречи. Если понадобится, продолжим диалог с новой реплики.");
+        RememberAgentReply(Session, EDialogTurnKind::Farewell);
+        return true;
+    }
+
+    if (IsSelfDescriptionQuery(LowerInput))
+    {
+        RememberUserTurn(Session, TrimmedInput, EIntentID::Unknown);
+        OutResponse = BuildSelfDescriptionResponse();
+        RememberAgentReply(Session, EDialogTurnKind::SelfDescription, TEXT("identity"));
+        return true;
+    }
+
+    if (IsCapabilityOverviewQuery(LowerInput))
+    {
+        RememberUserTurn(Session, TrimmedInput, EIntentID::Unknown);
+
+        if (IsCapabilityStrengthQuery(LowerInput))
+        {
+            OutResponse = BuildCapabilityStrengthResponse();
+            RememberAgentReply(Session, EDialogTurnKind::CapabilityOverview, TEXT("capability_strengths"));
+            return true;
+        }
+
+        if (IsCapabilityLimitationPrompt(LowerInput))
+        {
+            OutResponse = BuildCapabilityLimitationsResponse();
+            RememberAgentReply(Session, EDialogTurnKind::CapabilityLimitations, TEXT("capability_limits"));
+            return true;
+        }
+
+        OutResponse = BuildCapabilityOverviewResponse();
+        RememberAgentReply(Session, EDialogTurnKind::CapabilityOverview, TEXT("capabilities"));
+        return true;
+    }
+
+    if (IsFollowupCue(LowerInput))
+    {
+        if (Session.LastAgentTurnKind == EDialogTurnKind::CapabilityOverview
+            || Session.LastAgentTurnKind == EDialogTurnKind::CapabilityLimitations
+            || Session.LastAgentTurnKind == EDialogTurnKind::SelfDescription)
+        {
+            RememberUserTurn(Session, TrimmedInput, EIntentID::Unknown);
+
+            if (IsCapabilityStrengthQuery(LowerInput))
+            {
+                OutResponse = BuildCapabilityStrengthResponse();
+                RememberAgentReply(Session, EDialogTurnKind::CapabilityOverview, TEXT("capability_strengths"));
+                return true;
+            }
+
+            if (IsCapabilityLimitationPrompt(LowerInput) || LowerInput.Contains(TEXT("умеешь")))
+            {
+                OutResponse = BuildCapabilityLimitationsResponse();
+                RememberAgentReply(Session, EDialogTurnKind::CapabilityLimitations, TEXT("capability_limits"));
+                return true;
+            }
+
+            OutResponse = TEXT("Да, пока диалоговые возможности у меня ограничены. Лучше всего работают короткие прямые вопросы, память сессии и базовые intent-сценарии.");
+            RememberAgentReply(Session, EDialogTurnKind::CapabilityLimitations, TEXT("capability_limits"));
+            return true;
+        }
+    }
+
+    return false;
+}
+
 const FHypothesis* GetLastStoredHypothesis(const FDialogSession& Session)
 {
     if (Session.LastStoredHypothesisID != INDEX_NONE)
@@ -208,32 +524,35 @@ void RememberUserTurn(FDialogSession& Session, const FString& Input, EIntentID I
 
 FString BuildFallbackResponse(const FIntentResult& IntentResult, bool bVerbose)
 {
-    FResponseGenerator ResponseGen;
+    FString Response;
 
-    FResponsePersonalityProfile Profile = FResponsePersonalityProfile::MakeV1(
-        EResponseTone::Calm,
-        EResponseLength::Short,
-        EResponseInitiative::Low,
-        EResponseAddressStyle::NeutralYou
-    );
-
-    FResponseSemanticDecision Decision;
-    Decision.IntentID = IntentResult.IntentID;
-    Decision.SemanticCore = IntentResult.EntityTarget;
-    Decision.bHasUncertainty = (IntentResult.Confidence < 0.7f);
-    if (Decision.bHasUncertainty)
-        Decision.UncertaintyReason = TEXT("низкая уверенность разбора");
-
-    FResponseGenerationInput GenInput;
-    GenInput.ContextKey = TEXT("dialog");
-    GenInput.SemanticDecision = Decision;
-
-    const FResponseGenerationOutput ResponseOutput = ResponseGen.Generate(GenInput, Profile);
+    if (IntentResult.IntentID == EIntentID::Unknown || IntentResult.Confidence < 0.45f)
+    {
+        Response = TEXT("Не уверена, что правильно поняла вопрос. Могу рассказать о своих возможностях, запомнить факт или попробовать разобрать фразу в более простой формулировке.");
+    }
+    else if (IntentResult.IntentID == EIntentID::GetWordFact || IntentResult.IntentID == EIntentID::FindMeaning)
+    {
+        Response = IntentResult.EntityTarget.IsEmpty()
+            ? TEXT("Пока у меня нет достаточно надёжного ответа в этой формулировке. Лучше всего сейчас работают простые вопросы и память текущей сессии.")
+            : FString::Printf(TEXT("Пока у меня нет достаточно надёжного ответа про «%s». Лучше всего сейчас работают простые факты и память текущей сессии."), *IntentResult.EntityTarget);
+    }
+    else if (IntentResult.IntentID == EIntentID::GetDefinition)
+    {
+        Response = TEXT("Определение в такой формулировке я пока даю слабо. Попробуйте короткий вопрос вроде «что такое X?» или сначала сохраните факт в память сессии.");
+    }
+    else if (IntentResult.IntentID == EIntentID::AnswerAbility)
+    {
+        Response = TEXT("Если вопрос про мои возможности, лучше спросить прямо: «что ты умеешь?» или «ты можешь сделать X?»");
+    }
+    else
+    {
+        Response = TEXT("Пока не могу ответить достаточно уверенно. Попробуйте переформулировать вопрос короче или опереться на факт, который можно сохранить в память сессии.");
+    }
 
     if (bVerbose)
-        printf("  [4] Ответ агента:\n      %s\n", *ResponseOutput.ResponseText);
+        printf("  [4] Fallback ответ:\n      %s\n", *Response);
 
-    return ResponseOutput.ResponseText;
+    return Response;
 }
 }
 
@@ -242,6 +561,11 @@ FString ProcessPhrase(FDialogSession& Session, const FString& Input, bool bVerbo
     const FString TrimmedInput = Input.TrimStartAndEnd();
     if (TrimmedInput.IsEmpty())
         return TEXT("Не услышала ничего. Попробуйте ещё раз.");
+
+    const FString LowerInput = TrimmedInput.ToLower();
+    FString ShortcutResponse;
+    if (TryHandleDialogShortcut(Session, TrimmedInput, LowerInput, ShortcutResponse))
+        return ShortcutResponse;
 
     const EPhraseType PhraseType = Session.Classifier.Classify(TrimmedInput);
 
@@ -432,6 +756,33 @@ FString ProcessPhrase(FDialogSession& Session, const FString& Input, bool bVerbo
         ? ActionResult.ResultText
         : BuildFallbackResponse(IntentResult, bVerbose);
 
+    if (ActionResult.bSuccess && !ActionResult.ResultText.IsEmpty())
+    {
+        switch (IntentResult.IntentID)
+        {
+        case EIntentID::AnswerAbility:
+            RememberAgentReply(Session, EDialogTurnKind::CapabilityOverview, IntentResult.EntityTarget);
+            break;
+        case EIntentID::StoreFact:
+        case EIntentID::RetrieveMemory:
+        case EIntentID::CheckMemoryLoad:
+            RememberAgentReply(Session, EDialogTurnKind::Memory, IntentResult.EntityTarget);
+            break;
+        case EIntentID::GetDefinition:
+        case EIntentID::GetWordFact:
+        case EIntentID::FindMeaning:
+            RememberAgentReply(Session, EDialogTurnKind::Knowledge, IntentResult.EntityTarget);
+            break;
+        default:
+            RememberAgentReply(Session, EDialogTurnKind::None);
+            break;
+        }
+    }
+    else
+    {
+        RememberAgentReply(Session, EDialogTurnKind::Fallback, IntentResult.EntityTarget);
+    }
+
     RememberUserTurn(Session, TrimmedInput, IntentResult.IntentID);
     return Response;
 }
@@ -454,6 +805,7 @@ void PrintHelp()
     printf("    • что ты запомнила?\n");
     printf("    • что я сказал?\n");
     printf("    • кто такой пушкин?\n");
+    printf("    • что ты умеешь?\n");
     printf("\n");
     printf("  Команды:\n");
     printf("    help     — показать эту справку\n");
@@ -467,6 +819,8 @@ int main(int argc, char* argv[])
 {
     (void)argc;
     (void)argv;
+
+    InitializeUtf8Console();
 
     bool bVerbose = false;
 
@@ -492,7 +846,7 @@ int main(int argc, char* argv[])
         printf("\n┌──────────────────────────────────────────────────────────┐\n");
         printf("│ Вы: ");
 
-        if (!std::getline(std::cin, InputLine))
+        if (!ReadInputLine(InputLine))
         {
             printf("│ Нейра: Ввод завершён. Завершаю диалог.\n");
             printf("└──────────────────────────────────────────────────────────┘\n");
@@ -535,7 +889,7 @@ int main(int argc, char* argv[])
             continue;
         }
 
-        const FString Input(InputLine.c_str());
+        const FString Input(InputLine);
 
         if (bVerbose)
         {

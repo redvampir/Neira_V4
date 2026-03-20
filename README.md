@@ -46,6 +46,7 @@
 - Локальная проверка на 2026-03-20: `146/146 PASS`.
 - `ThresholdRegressionGateTests.cpp` и связанные fixtures подключены, но воспроизводимый `make regression-gate` пока зависит от наличия GNU `make`.
 - Встроенный словарь работает в runtime. OpenCorpora тоже подключен в runtime-path `FMorphAnalyzer`: lookup идет по схеме `dict -> ext_dict -> suffix -> unknown`, а full JSON грузится в `lazy`-режиме по policy.
+- `NeiraDialog` получил P0-слой meta-диалога: базовые реплики про возможности, идентичность, приветствие, благодарность и follow-up уточнения обрабатываются до морфологического pipeline и отвечают более естественно.
 - Ближайший этап: Privacy/Security baseline -> SLA C++/Blueprint -> migration playbook для v0.4+.
 
 ---

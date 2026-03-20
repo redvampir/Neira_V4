@@ -17,9 +17,106 @@
 #include "../NeiraCore/Public/FMorphAnalyzer.h"
 #include "../NeiraCore/Public/FSyntaxParser.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+#include <clocale>
 #include <iostream>
 #include <string>
 #include <sstream>
+
+namespace
+{
+void InitializeUtf8Console()
+{
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+
+    if (std::setlocale(LC_ALL, ".UTF-8") == nullptr)
+    {
+        std::setlocale(LC_ALL, ".65001");
+    }
+}
+
+#ifdef _WIN32
+std::string WideToUtf8(const std::wstring& Value)
+{
+    if (Value.empty())
+        return std::string();
+
+    const int Required = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        Value.data(),
+        static_cast<int>(Value.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr
+    );
+
+    if (Required <= 0)
+        return std::string();
+
+    std::string Result(static_cast<size_t>(Required), '\0');
+    const int Written = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        Value.data(),
+        static_cast<int>(Value.size()),
+        Result.data(),
+        Required,
+        nullptr,
+        nullptr
+    );
+
+    return (Written > 0) ? Result : std::string();
+}
+#endif
+
+bool ReadInputLine(std::string& OutLine)
+{
+#ifdef _WIN32
+    HANDLE InputHandle = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD ConsoleMode = 0;
+
+    if (InputHandle != nullptr
+        && InputHandle != INVALID_HANDLE_VALUE
+        && GetConsoleMode(InputHandle, &ConsoleMode))
+    {
+        std::wstring WideLine;
+        WideLine.reserve(128);
+
+        while (true)
+        {
+            wchar_t Buffer[128] = {};
+            DWORD CharsRead = 0;
+            if (!ReadConsoleW(InputHandle, Buffer, 127, &CharsRead, nullptr))
+                return false;
+            if (CharsRead == 0)
+                return false;
+
+            WideLine.append(Buffer, Buffer + CharsRead);
+
+            if (WideLine.find(L'\n') != std::wstring::npos)
+                break;
+        }
+
+        while (!WideLine.empty() && (WideLine.back() == L'\n' || WideLine.back() == L'\r'))
+            WideLine.pop_back();
+
+        OutLine = WideToUtf8(WideLine);
+        return true;
+    }
+#endif
+
+    return static_cast<bool>(std::getline(std::cin, OutLine));
+}
+}
 
 // ---------------------------------------------------------------------------
 // Helper: вывод типа фразы
@@ -350,6 +447,11 @@ void PrintHelp()
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
+    (void)argc;
+    (void)argv;
+
+    InitializeUtf8Console();
+
     printf("\n");
     printf("╔══════════════════════════════════════════════════════════╗\n");
     printf("║           NEIRA CORE — КОНСОЛЬНЫЙ ИНТЕРФЕЙС              ║\n");
@@ -370,7 +472,12 @@ int main(int argc, char* argv[])
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ Ввод: ");
         
-        std::getline(std::cin, InputLine);
+        if (!ReadInputLine(InputLine))
+        {
+            printf("│ EOF / ошибка ввода\n");
+            printf("└──────────────────────────────────────────────────────────┘\n");
+            break;
+        }
         
         if (InputLine.empty())
         {
@@ -394,7 +501,7 @@ int main(int argc, char* argv[])
         }
         
         // Обработка фразы
-        FString Input(InputLine.c_str());
+        FString Input(InputLine);
         ProcessPhrase(Input);
     }
     
