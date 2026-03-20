@@ -3,13 +3,14 @@
 #include "CoreMinimal.h"
 #include "NeiraTypes.h"
 #include "FResponseGenerator.h"
+#include "FMorphAgreement.h"
 
 // ---------------------------------------------------------------------------
 // FSyntacticStrategy
 //
 // Одна синтаксическая стратегия построения предложения.
-// PatternFmt содержит плейсхолдеры {Subject} и {Object}.
-// Используется только номинатив — морфологическое согласование фаза 2.
+// PatternFmt содержит плейсхолдеры:
+// {SubjectNom}, {SubjectPrep}, {SubjectIns}, {Object}.
 // ---------------------------------------------------------------------------
 struct FSyntacticStrategy
 {
@@ -17,7 +18,7 @@ struct FSyntacticStrategy
     EIntentID        IntentID    = EIntentID::Unknown;
     EConfidenceLevel Confidence  = EConfidenceLevel::Unknown;
     EResponseTone    Tone        = EResponseTone::Calm;
-    FString          PatternFmt; // плейсхолдеры: {Subject}, {Object}
+    FString          PatternFmt; // плейсхолдеры: {SubjectNom}, {SubjectPrep}, {SubjectIns}, {Object}
 };
 
 // ---------------------------------------------------------------------------
@@ -27,8 +28,7 @@ struct FSyntacticStrategy
 // из семантического фрейма. Детерминирован: одинаковый RotationHint →
 // одинаковая стратегия (нет случайности, только ротация по счётчику).
 //
-// Фаза 1: стратегии с именительным падежом, без FMorphRealizer.
-// Фаза 2: подключение FMorphRealizer для падежного согласования.
+// Morph agreement (падеж/род/число) применяется через FMorphAgreement.
 // ---------------------------------------------------------------------------
 struct NEIRACORE_API FSentencePlanner
 {
@@ -64,8 +64,8 @@ private:
                                               EConfidenceLevel Confidence,
                                               EResponseTone    Tone) const;
 
-    // Заменить {Subject} и {Object} в паттерне.
+    // Заменить формы субъекта и {Object} в паттерне.
     static FString Fill(const FString& Pattern,
-                        const FString& Subject,
+                        const FEntityTargetForms& SubjectForms,
                         const FString& Object);
 };
