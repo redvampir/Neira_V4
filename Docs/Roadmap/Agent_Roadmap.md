@@ -5,7 +5,7 @@
 > Этот документ является основным source of truth по актуальному статусу проекта. Исторические audit-отчеты полезны как контекст, но не должны переопределять текущий статус из этого файла.
 
 Дата фиксации: **2026-03-20**
-Последняя локальная проверка: `make -C Source/Tests run` -> **199/200 PASS** (1 pre-existing: OpenCorpora JSON отсутствует в тестовом окружении)
+Последняя локальная проверка: `make -C Source/Tests run` -> **199/200 PASS** (исторический срез до фикса внешнего test fixture OpenCorpora)
 Ограничение текущего Windows PowerShell-окружения: `bash` доступен, `make` отсутствует; поэтому команда `make regression-gate` пока не является универсально воспроизводимой без дополнительной установки GNU `make`.
 
 ## Навигация
@@ -154,6 +154,7 @@
 - `Done` Формальные контракты модулей v1 опубликованы.
 - `Done` Встроенный словарь расширен до 1000+ форм и работает в runtime.
 - `Done` OpenCorpora скачан, сконвертирован и интегрирован в runtime-path `FMorphAnalyzer` с lazy-load policy и size guard.
+- `Done` Для `Neira.MorphAnalyzer.ExternalDictionary.AutoLoadAndLookup` добавлен репозиторный fixture `Data/Dictionaries/opencorpora_dict.json`; тест больше не опирается на локальный внешний файл разработчика.
 - `Done` Локальный нативный тестовый раннер на 2026-03-20 дает `146/146 PASS` (NeiraDialog snapshot), нативный Linux runner — `199/200 PASS`.
 - `Done` v0.5 NLG: `FSentencePlanner` с библиотекой ~55 стратегий; `FResponseGenerator` переведён на натуральный язык; детерминированная ротация; 8 новых тестов `SentencePlannerTests.cpp`.
 - `Next` Следующий этап: `FMorphRealizer` (падежное согласование, фаза 2 NLG) и/или Privacy/Security baseline.
