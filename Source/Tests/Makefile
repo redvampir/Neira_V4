@@ -32,7 +32,8 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/VoiceSessionOrchestratorSmokeTests.cpp \
             ../NeiraTests/Private/ResponseGeneratorTests.cpp \
             ../NeiraTests/Private/VoiceFixtureMetricsTests.cpp \
-            ../NeiraTests/Private/SemanticGraphTests.cpp
+            ../NeiraTests/Private/SemanticGraphTests.cpp \
+            ../NeiraTests/Private/SemanticIntegrationTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 

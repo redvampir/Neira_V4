@@ -99,6 +99,24 @@ FResponseGenerationOutput FResponseGenerator::Generate(const FResponseGeneration
         Lines.Add(FString::Printf(TEXT("Неопределённость: %s."), *Why));
     }
 
+    if (!Input.SemanticDecision.RelatedTerms.IsEmpty())
+    {
+        // Метка секции
+        const FString Label = Input.SemanticDecision.RelatedTermsLabel.TrimStartAndEnd().IsEmpty()
+                                  ? TEXT("Связанные понятия")
+                                  : Input.SemanticDecision.RelatedTermsLabel.TrimStartAndEnd();
+
+        // Собрать термины через запятую
+        FString TermsList;
+        for (int32 i = 0; i < Input.SemanticDecision.RelatedTerms.Num(); ++i)
+        {
+            if (i > 0)
+                TermsList += TEXT(", ");
+            TermsList += Input.SemanticDecision.RelatedTerms[i];
+        }
+        Lines.Add(FString::Printf(TEXT("%s: %s."), *Label, *TermsList));
+    }
+
     if (Profile.bForbidHallucination)
     {
         Lines.Add(TEXT("Ограничение: факты не выдумываю."));

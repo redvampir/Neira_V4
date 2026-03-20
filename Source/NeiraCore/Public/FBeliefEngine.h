@@ -5,6 +5,9 @@
 #include "FIntentExtractor.h"
 #include "FHypothesisStore.h"
 
+// Forward declaration — полное определение включается только в .cpp
+struct FSemanticGraph;
+
 /**
  * EBeliefAction — тип решения, принятого FBeliefEngine.
  */
@@ -22,6 +25,8 @@ enum class EBeliefAction : uint8
  *
  * Содержит принятое действие, ID затронутой гипотезы,
  * фактическую уверенность после весовой коррекции и причину.
+ * MatchedVia: пустая строка при точном совпадении;
+ *             синоним/гипероним при расширении через FSemanticGraph.
  */
 struct NEIRACORE_API FBeliefDecision
 {
@@ -29,6 +34,7 @@ struct NEIRACORE_API FBeliefDecision
     int32          HypothesisID       = -1;
     float          AppliedConfidence  = 0.0f;   // Confidence * SourceWeight
     FString        Reason;
+    FString        MatchedVia;                  // синоним/гипероним или пусто
 };
 
 /**
@@ -61,11 +67,17 @@ struct NEIRACORE_API FBeliefEngine
      * @param Intent   Результат FIntentExtractor::Extract().
      * @param Store    Хранилище гипотез (изменяется in-place).
      * @param Source   Тип источника — влияет на вес уверенности.
+     * @param Graph    Семантический граф (опционально).
+     *                 Если задан и загружен, расширяет поиск гипотезы через
+     *                 синонимы и гиперонимы при отсутствии точного совпадения.
      * @return         Решение: что было сделано и с какой гипотезой.
+     *                 FBeliefDecision::MatchedVia содержит слово, через которое
+     *                 найдено совпадение (пусто при прямом поиске).
      */
-    FBeliefDecision Process(const FIntentResult&  Intent,
-                            FHypothesisStore&     Store,
-                            EHypothesisSource     Source) const;
+    FBeliefDecision Process(const FIntentResult&   Intent,
+                            FHypothesisStore&      Store,
+                            EHypothesisSource      Source,
+                            const FSemanticGraph*  Graph = nullptr) const;
 
 private:
     static float GetSourceWeight(EHypothesisSource Source);

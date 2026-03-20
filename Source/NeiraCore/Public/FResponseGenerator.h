@@ -62,6 +62,14 @@ struct NEIRACORE_API FResponseSemanticDecision
 
     bool      bHasUncertainty = false;
     FString   UncertaintyReason;
+
+    // Семантически связанные понятия (синонимы, гиперонимы и т.д.),
+    // заполняются вызывающим кодом из FSemanticGraph.
+    // Отображаются только если список не пустой.
+    TArray<FString> RelatedTerms;
+    // Метка раздела: "Синонимы", "Родовые понятия", "Связанные понятия" и т.д.
+    // По умолчанию "Связанные понятия".
+    FString         RelatedTermsLabel;
 };
 
 // Рендеринг ответа: сочетает фактологическое решение и personality.

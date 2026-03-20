@@ -10,6 +10,7 @@
 //   Остальные   → NoMatch.
 
 #include "FBeliefEngine.h"
+#include "FSemanticGraph.h"
 
 namespace
 {
@@ -38,9 +39,10 @@ float FBeliefEngine::GetSourceWeight(EHypothesisSource Source)
     }
 }
 
-FBeliefDecision FBeliefEngine::Process(const FIntentResult& Intent,
-                                       FHypothesisStore&    Store,
-                                       EHypothesisSource    Source) const
+FBeliefDecision FBeliefEngine::Process(const FIntentResult&  Intent,
+                                       FHypothesisStore&     Store,
+                                       EHypothesisSource     Source,
+                                       const FSemanticGraph* Graph) const
 {
     FBeliefDecision Decision;
     const float Weight           = GetSourceWeight(Source);
@@ -80,7 +82,34 @@ FBeliefDecision FBeliefEngine::Process(const FIntentResult& Intent,
             return Decision;
         }
 
-        const int32 ID = Store.FindByClaim(Intent.EntityTarget);
+        int32 ID = Store.FindByClaim(Intent.EntityTarget);
+
+        // Семантическое расширение: если точного совпадения нет,
+        // проверяем синонимы и гиперонимы через граф.
+        if (ID == -1 && Graph && Graph->IsLoaded())
+        {
+            // Сначала синонимы (более близкие по смыслу), затем гиперонимы
+            auto TryExpand = [&](const TArray<FString>& Candidates,
+                                 const FString& RelLabel)
+            {
+                for (const FString& Alias : Candidates)
+                {
+                    const int32 AliasID = Store.FindByClaim(Alias);
+                    if (AliasID != -1)
+                    {
+                        ID = AliasID;
+                        Decision.MatchedVia = FString::Printf(
+                            TEXT("%s:%s"), *RelLabel, *Alias);
+                        return;
+                    }
+                }
+            };
+
+            TryExpand(Graph->GetSynonyms(Intent.EntityTarget),  TEXT("synonym"));
+            if (ID == -1)
+                TryExpand(Graph->GetHypernyms(Intent.EntityTarget), TEXT("hypernym"));
+        }
+
         if (ID == -1)
         {
             Decision.Action = EBeliefAction::NoMatch;
