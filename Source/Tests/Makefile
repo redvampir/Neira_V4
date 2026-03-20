@@ -16,7 +16,8 @@ CORE_SRC := ../NeiraCore/Private/FPhraseClassifier.cpp \
             ../NeiraCore/Private/FOfflineVoiceAdapters.cpp \
             ../NeiraCore/Private/FVoiceSessionOrchestrator.cpp \
             ../NeiraCore/Private/FResponseGenerator.cpp \
-            ../NeiraCore/Private/FSemanticGraph.cpp
+            ../NeiraCore/Private/FSemanticGraph.cpp \
+            ../NeiraCore/Private/FDialoguePipeline.cpp
 
 TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/IntentExtractorTests.cpp \
@@ -33,7 +34,8 @@ TEST_SRC := ../NeiraTests/Private/PhraseClassifierTests.cpp \
             ../NeiraTests/Private/ResponseGeneratorTests.cpp \
             ../NeiraTests/Private/VoiceFixtureMetricsTests.cpp \
             ../NeiraTests/Private/SemanticGraphTests.cpp \
-            ../NeiraTests/Private/SemanticIntegrationTests.cpp
+            ../NeiraTests/Private/SemanticIntegrationTests.cpp \
+            ../NeiraTests/Private/DialoguePipelineTests.cpp
 
 ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 
