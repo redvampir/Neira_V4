@@ -154,6 +154,7 @@ Regression gate переведён на platform-neutral launcher: `scripts/regr
 - `Done` Формальные контракты модулей v1 опубликованы.
 - `Done` Встроенный словарь расширен до 1000+ форм и работает в runtime.
 - `Done` OpenCorpora скачан, сконвертирован и интегрирован в runtime-path `FMorphAnalyzer` с lazy-load policy и size guard.
+- `Done` Для `Neira.MorphAnalyzer.ExternalDictionary.AutoLoadAndLookup` добавлен репозиторный fixture `Data/Dictionaries/opencorpora_dict.json`; тест больше не опирается на локальный внешний файл разработчика.
 - `Done` Локальный нативный тестовый раннер на 2026-03-20 дает `146/146 PASS` (NeiraDialog snapshot), нативный Linux runner — `199/200 PASS`.
 - `Done` v0.5 NLG: `FSentencePlanner` с библиотекой ~55 стратегий; `FResponseGenerator` переведён на натуральный язык; детерминированная ротация; 8 новых тестов `SentencePlannerTests.cpp`.
 - `Next` Следующий этап: `FMorphRealizer` (падежное согласование, фаза 2 NLG) и/или Privacy/Security baseline.
