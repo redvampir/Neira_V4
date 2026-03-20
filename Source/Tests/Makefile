@@ -49,10 +49,12 @@ ALL_SRC  := main.cpp $(CORE_SRC) $(TEST_SRC)
 # - run             : full quality diagnostics (all tests in neira_tests).
 #                     Expected outcome: full suite passes.
 #                     Return code: 0 on full pass, non-zero on any failing test or runtime error.
+#                     Merge impact: non-blocking quality signal for developers/PR authors.
 # - regression-gate : merge-blocking drift-only gate (Neira.RegressionGate.* tests only).
 #                     Expected outcome: no FAIL entries for drift metrics.
 #                     Return code: 0 when no drift regressions are detected,
 #                                  1 when at least one Neira.RegressionGate.* test fails.
+#                     Merge impact: blocking required check in CI.
 
 all: neira_tests
 
@@ -67,9 +69,9 @@ regression-gate: neira_tests
 	bash ./scripts/regression_gate.sh
 
 mode-matrix:
-	@echo "Mode              Scope                                      Expected outcome                               Return code"
-	@echo "run               Full quality diagnostics                    Full suite passes                               0=pass; non-zero=any test/runtime failure"
-	@echo "regression-gate   Merge-blocking drift metrics only          No FAIL in Neira.RegressionGate.*              0=no drift regression; 1=drift regression detected"
+	@echo "Mode              Scope                                      Expected outcome                               Return code                                         Merge impact"
+	@echo "run               Full quality diagnostics                    Full suite passes                               0=pass; non-zero=any test/runtime failure         Non-blocking quality signal"
+	@echo "regression-gate   Merge-blocking drift metrics only          No FAIL in Neira.RegressionGate.*              0=no drift regression; 1=drift regression detected Blocking required check"
 
 clean:
 	rm -f neira_tests *.o

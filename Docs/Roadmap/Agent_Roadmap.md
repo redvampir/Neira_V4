@@ -16,6 +16,7 @@ Regression gate переведён на platform-neutral launcher: `Source/Tests
 - [3) Приоритетный маршрут](#priority-route)
 - [4) Definition of Done для агентов](#dod)
 - [4.2) Локальный/CI запуск regression gate](#regression-gate)
+- [4.2.1) Единый policy source of truth (`run` vs `regression-gate`)](#test-mode-policy-sot)
 - [6) Что считать "сделано" уже сейчас](#done-now)
 - [7) Результат ревизии handoff](#handoff-review)
 - [README](../../README.md)
@@ -116,6 +117,13 @@ Regression gate переведён на platform-neutral launcher: `Source/Tests
 - Windows PowerShell: `.\Source\Tests\scripts\regression_gate.ps1`.
 - CI: workflow `.github/workflows/regression-gate.yml` запускает launcher из `Source/Tests/scripts/` и помечается как required merge check (`regression-gate (linux)` и/или `regression-gate (windows)`). После подтверждённого зелёного прогона в CI operational-пункт по launcher считается `Done`.
 - Policy: любое изменение `RegressionThresholds.cfg` требует успешного прогона regression gate на фиксированном RU/EN наборе.
+
+<a id="test-mode-policy-sot"></a>
+### 4.2.1) Единый policy source of truth (`run` vs `regression-gate`)
+
+Единственный источник правды по матрице режимов (`цель` / `ожидаемый результат` / `код возврата` / `влияние на merge`) — таблица в `Source/Tests/README.md` в разделе **«Матрица режимов (policy)»**.
+
+Все записи в handoff-log, roadmap и review-доках должны использовать формулировки из этой таблицы без перефразирования смысла.
 
 ### 4.3) Privacy/Security baseline — owner запись
 
