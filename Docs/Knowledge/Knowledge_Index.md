@@ -1,4 +1,4 @@
-# Knowledge Index (на 2026-03-19)
+# Knowledge Index (на 2026-03-20)
 
 Единая карта документов для ускорения работы агентов.
 
@@ -24,3 +24,9 @@
 |---|---|---|---|---|
 | `Docs/Contracts/Module_Contracts_v1.md` | Формальные контракты (поля, инварианты, предусловия) для FMorphResult, FIntentResult, FActionRequest/Result, FHypothesis, FHypothesisEvent, FBeliefDecision | Перед изменениями любого из этих типов | Team | При изменении интерфейсов (schema_version++) |
 | `Docs/Contracts/Error_Catalog.md` | Коды ошибок EActionFailReason, EMemoryPolicyDegradationReason, EBeliefAction + матрица recovery + формат DiagnosticNote | При обработке ошибок, написании тестов, доработке генератора ответов | Team | При добавлении новых кодов |
+
+## Architecture
+
+| Документ | Назначение | Когда читать | Владелец | Частота обновления |
+|---|---|---|---|---|
+| `Docs/Architecture/CppLibraries_Recommendations.md` | Рекомендованные внешние инструменты (UDPipe, fastText, SQLite CTE) для извлечения отношений, инференса и семантического сходства | При планировании работ по обогащению семантического графа или расширению NLU | Team | При появлении новых кандидатов или изменении фазового плана |
