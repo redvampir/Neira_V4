@@ -1,0 +1,49 @@
+name: regression-gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  regression-gate-linux:
+    name: regression-gate (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libsqlite3-dev
+
+      - name: Build tests binary
+        run: make -C Source/Tests neira_tests
+
+      - name: Run regression gate launcher (unix)
+        run: bash scripts/regression_gate.sh
+
+  regression-gate-windows:
+    name: regression-gate (windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps (msys2 + sqlite)
+        shell: pwsh
+        run: |
+          choco install msys2 --yes --no-progress
+          C:\tools\msys64\usr\bin\bash -lc "pacman --noconfirm -Syuu || true"
+          C:\tools\msys64\usr\bin\bash -lc "pacman --noconfirm -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-sqlite3 make"
+
+      - name: Build tests binary (msys2)
+        shell: pwsh
+        run: |
+          C:\tools\msys64\usr\bin\bash -lc "export PATH=/ucrt64/bin:$PATH && cd /d/a/Neira_V4/Neira_V4/Source/Tests && make neira_tests"
+
+      - name: Run regression gate launcher (powershell)
+        shell: pwsh
+        run: .\scripts\regression_gate.ps1
