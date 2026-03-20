@@ -9,6 +9,13 @@
 - `run` — полный прогон всех тестов; падает при любом fail.
 - `regression-gate` — merge-blocking gate; падает **только** если есть `FAIL Neira.RegressionGate.*`.
 
+### Матрица режимов (policy)
+
+| Режим | Цель | Ожидаемый результат | Код возврата | Влияние на merge |
+|---|---|---|---|---|
+| `run` | Полная диагностика качества (весь `neira_tests`) | Нет падений в полном наборе тестов | `0` — все тесты прошли; `!=0` — есть хотя бы один fail/runtime error | **Неблокирующий** сам по себе, используется как инженерная проверка качества перед PR |
+| `regression-gate` | Merge-blocking drift/threshold gate (`Neira.RegressionGate.*`) | Нет `FAIL Neira.RegressionGate.*` | `0` — регрессий drift/threshold нет; `1` — найден хотя бы один fail в `Neira.RegressionGate.*` | **Блокирующий** merge (required check в CI) |
+
 ## Linux / macOS
 
 ```bash
@@ -36,3 +43,5 @@ C:\tools\msys64\usr\bin\bash -lc "export PATH=/ucrt64/bin:$PATH && cd /d/a/Neira
 Workflow: `.github/workflows/regression-gate.yml`.
 
 Merge-blocking job должен использовать launcher из `Source/Tests/scripts/` и трактовать как blocking только падения `Neira.RegressionGate.*`.
+
+Policy-формулировки для handoff/roadmap должны совпадать с этой матрицей (единая терминология `run` vs `regression-gate`).
