@@ -138,7 +138,16 @@
 - cold-start policy по умолчанию = `lazy`: словарь не парсится на пустом старте и поднимается при первом реальном внешнем lookup;
 - memory/cold-start guard задаются через `NEIRA_EXTERNAL_DICT_MODE`, `NEIRA_EXTERNAL_DICT_PATH`, `NEIRA_EXTERNAL_DICT_MAX_MB`.
 - внешний lookup работает в runtime и покрыт тестом `Neira.MorphAnalyzer.ExternalDictionary.AutoLoadAndLookup`.
-- для стабильности CI в репозитории хранится минимальный fixture `Data/Dictionaries/opencorpora_dict.json`, чтобы тест внешнего словаря не зависел от локального окружения разработчика.
+- для стабильности CI в репозитории хранится минимальный fixture `Data/Dictionaries/opencorpora_dict.json`, а сам тест резолвит путь только через repo-relative кандидаты; если fixture отсутствует в конкретном checkout, тест помечает сценарий как `SKIP` с явной диагностикой вместо ложного падения.
+
+### Контракт тестового словаря (`ExternalDictionary.AutoLoadAndLookup`)
+
+- Базовый путь fixture фиксирован: `Data/Dictionaries/opencorpora_dict.json` (repo-relative).
+- Тест не опирается на machine-specific абсолютные пути разработчика.
+- При отсутствии fixture:
+  - тест не валит suite ложноположительно;
+  - пишет диагностическое сообщение `SKIP: ... opencorpora_dict.json не найден ...`;
+  - возвращает `true` как осознанный skip-контракт.
 
 Что еще не сделано:
 
