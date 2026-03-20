@@ -13,6 +13,8 @@
 | ADR | Статус | Дата | Владелец | Заменён чем | Тема |
 |---|---|---|---|---|---|
 | [0001](0001-source-of-truth-priority.md) | accepted | 2026-03-19 | Team | — | Приоритет источников истины при конфликте интерпретаций |
+| [0002](0002-system-classification-sba.md) | accepted | 2026-03-20 | Team | — | Классификация Нейры как Symbolic Belief Agent (SBA) |
+| [0003](0003-nlg-semantic-constructor.md) | accepted | 2026-03-20 | Team | — | Построение ответов через семантический конструктор (NLG) |
 
 ## Как добавлять новый ADR
 

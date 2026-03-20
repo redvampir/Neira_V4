@@ -5,6 +5,9 @@
 
 #define NEIRA_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
+// ---------------------------------------------------------------------------
+// Snapshot: выход — натуральное русское предложение, не debug-дамп
+// ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FResponseGenerator_ProfileV1_SnapshotContract,
     "Neira.ResponseGenerator.ProfileV1.SnapshotContract",
@@ -18,31 +21,31 @@ bool FResponseGenerator_ProfileV1_SnapshotContract::RunTest(const FString& Param
         EResponseInitiative::Low);
 
     FResponseGenerationInput Input;
-    Input.ContextKey = TEXT("session_main");
-    Input.SemanticDecision.IntentID = EIntentID::GetDefinition;
-    Input.SemanticDecision.SemanticCore = TEXT("синтаксис — раздел лингвистики о построении предложений");
+    Input.ContextKey                           = TEXT("session_main");
+    Input.SemanticDecision.IntentID            = EIntentID::GetDefinition;
+    Input.SemanticDecision.EntityTarget        = TEXT("синтаксис");
+    Input.SemanticDecision.SemanticCore        = TEXT("раздел лингвистики о построении предложений");
+    Input.SemanticDecision.ConfidenceLevel     = EConfidenceLevel::Verified;
+    Input.SessionResponseCount                 = 0;
 
     const FResponseGenerationOutput Out = Generator.Generate(Input, Profile);
 
-    const FString Expected =
-        TEXT("[profile=personality_profile_v1; tone=calm; len=short; initiative=low; address=neutral_you; format=v1.intent_1.ctx_session_main.tone_calm.len_short.init_low.addr_neutral_you]\n")
-        TEXT("Тон: спокойный.\n")
-        TEXT("Обращение: нейтральное, на «вы».\n")
-        TEXT("Инициатива: низкая.\n")
-        TEXT("Ответ: определение — синтаксис — раздел лингвистики о построении предложений.\n")
-        TEXT("Ограничение: факты не выдумываю.");
+    // Ответ — первая стратегия для GetDefinition+Verified+Calm (index 0): "X — это Y."
+    const FString Expected = TEXT("синтаксис — это раздел лингвистики о построении предложений.");
+    TestEqual(TEXT("Snapshot должен быть стабильным"), Out.ResponseText, Expected);
 
-    TestEqual(TEXT("Snapshot/contract должен быть стабильным"), Out.ResponseText, Expected);
-
-    TestTrue(TEXT("Обязателен блок profile"), Out.ResponseText.Contains(TEXT("[profile=personality_profile_v1")));
-    TestTrue(TEXT("Обязателен блок tone"), Out.ResponseText.Contains(TEXT("Тон:")));
-    TestTrue(TEXT("Обязателен блок address"), Out.ResponseText.Contains(TEXT("Обращение:")));
-    TestTrue(TEXT("Обязателен блок answer"), Out.ResponseText.Contains(TEXT("Ответ:")));
-    TestTrue(TEXT("Обязателен блок hallucination guard"), Out.ResponseText.Contains(TEXT("факты не выдумываю")));
+    // FormatID стабилен и содержит ключевые части
+    TestTrue(TEXT("FormatID содержит intent"), Out.FormatID.Contains(TEXT("intent_")));
+    TestTrue(TEXT("FormatID содержит strategy"), Out.FormatID.Contains(TEXT(".s_")));
+    TestFalse(TEXT("Нет debug-блока [profile=]"), Out.ResponseText.Contains(TEXT("[profile=")));
+    TestFalse(TEXT("Нет Тон:"), Out.ResponseText.Contains(TEXT("Тон:")));
 
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Детерминизм: одинаковый input → одинаковый output
+// ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FResponseGenerator_DeterministicPolicy_SameIntentContext,
     "Neira.ResponseGenerator.DeterministicPolicy.SameIntentContext",
@@ -56,25 +59,30 @@ bool FResponseGenerator_DeterministicPolicy_SameIntentContext::RunTest(const FSt
         EResponseInitiative::Medium);
 
     FResponseGenerationInput Input;
-    Input.ContextKey = TEXT("dialog_42");
-    Input.SemanticDecision.IntentID = EIntentID::FindMeaning;
-    Input.SemanticDecision.SemanticCore = TEXT("лексема задаёт смысловое ядро запроса");
-    Input.SemanticDecision.bHasUncertainty = true;
-    Input.SemanticDecision.UncertaintyReason = TEXT("контекст предыдущего шага неполный");
+    Input.ContextKey                           = TEXT("dialog_42");
+    Input.SemanticDecision.IntentID            = EIntentID::FindMeaning;
+    Input.SemanticDecision.EntityTarget        = TEXT("лексема");
+    Input.SemanticDecision.SemanticCore        = TEXT("задаёт смысловое ядро запроса");
+    Input.SemanticDecision.ConfidenceLevel     = EConfidenceLevel::Inferred;
+    Input.SemanticDecision.bHasUncertainty     = true;
+    Input.SemanticDecision.UncertaintyReason   = TEXT("контекст предыдущего шага неполный");
+    Input.SessionResponseCount                 = 0;
 
-    const FResponseGenerationOutput First = Generator.Generate(Input, Profile);
+    const FResponseGenerationOutput First  = Generator.Generate(Input, Profile);
     const FResponseGenerationOutput Second = Generator.Generate(Input, Profile);
 
-    TestEqual(TEXT("FormatID должен быть детерминирован"), First.FormatID, Second.FormatID);
-    TestEqual(TEXT("Ответ должен быть детерминирован для одинакового intent+context"),
-              First.ResponseText,
-              Second.ResponseText);
-    TestTrue(TEXT("При неопределённости нужен явный блок"),
+    TestEqual(TEXT("FormatID детерминирован"), First.FormatID, Second.FormatID);
+    TestEqual(TEXT("ResponseText детерминирован"), First.ResponseText, Second.ResponseText);
+    TestTrue(TEXT("StrategyID заполнен"), !First.StrategyID.IsEmpty());
+    TestTrue(TEXT("При неопределённости — блок Неопределённость:"),
              First.ResponseText.Contains(TEXT("Неопределённость:")));
 
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Смысловое ядро сохраняется в разных тонах
+// ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FResponseGenerator_SemanticCore_InvariantAcrossTone,
     "Neira.ResponseGenerator.SemanticCore.InvariantAcrossTone",
@@ -83,12 +91,13 @@ bool FResponseGenerator_SemanticCore_InvariantAcrossTone::RunTest(const FString&
 {
     FResponseGenerator Generator;
 
-    const FString CoreMeaning = TEXT("порог confidence ограничивает запуск действия");
-
     FResponseGenerationInput Input;
-    Input.ContextKey = TEXT("ability_gate");
-    Input.SemanticDecision.IntentID = EIntentID::AnswerAbility;
-    Input.SemanticDecision.SemanticCore = CoreMeaning;
+    Input.ContextKey                       = TEXT("ability_gate");
+    Input.SemanticDecision.IntentID        = EIntentID::AnswerAbility;
+    Input.SemanticDecision.EntityTarget    = TEXT("синтаксис");
+    Input.SemanticDecision.SemanticCore    = TEXT("синтаксис");
+    Input.SemanticDecision.ConfidenceLevel = EConfidenceLevel::Verified;
+    Input.SessionResponseCount             = 0;
 
     const FResponseGenerationOutput CalmOut = Generator.Generate(
         Input,
@@ -98,49 +107,49 @@ bool FResponseGenerator_SemanticCore_InvariantAcrossTone::RunTest(const FString&
         Input,
         FResponsePersonalityProfile::MakeV1(EResponseTone::Business, EResponseLength::Short, EResponseInitiative::Low));
 
-    const FString CoreLine = FString(TEXT("Ответ: возможность — ")) + CoreMeaning + TEXT(".");
-
-    TestTrue(TEXT("Смысловое ядро должно сохраняться в calm"), CalmOut.ResponseText.Contains(CoreLine));
-    TestTrue(TEXT("Смысловое ядро должно сохраняться в business"), BusinessOut.ResponseText.Contains(CoreLine));
-    TestTrue(TEXT("Тон должен менять стилевую часть"), CalmOut.ResponseText != BusinessOut.ResponseText);
+    // Оба ответа упоминают синтаксис (entity target)
+    TestTrue(TEXT("Calm содержит entity target"), CalmOut.ResponseText.Contains(TEXT("синтаксис")));
+    TestTrue(TEXT("Business содержит entity target"), BusinessOut.ResponseText.Contains(TEXT("синтаксис")));
+    // Тон меняет стратегию → разные StrategyID
+    TestTrue(TEXT("Тон меняет стратегию"), CalmOut.StrategyID != BusinessOut.StrategyID);
 
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Ротация: разные счётчики дают разные стратегии (если > 1 кандидата)
+// ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-    FResponseGenerator_AddressStyle_ChangesOnlyFormNotFacts,
-    "Neira.ResponseGenerator.AddressStyle.ChangesOnlyFormNotFacts",
+    FResponseGenerator_Rotation_ChangesPhraseVariant,
+    "Neira.ResponseGenerator.Rotation.ChangesPhraseVariant",
     NEIRA_TEST_FLAGS)
-bool FResponseGenerator_AddressStyle_ChangesOnlyFormNotFacts::RunTest(const FString& Parameters)
+bool FResponseGenerator_Rotation_ChangesPhraseVariant::RunTest(const FString& Parameters)
 {
     FResponseGenerator Generator;
+    const FResponsePersonalityProfile Profile = FResponsePersonalityProfile::MakeV1(
+        EResponseTone::Calm, EResponseLength::Short, EResponseInitiative::Low);
 
     FResponseGenerationInput Input;
-    Input.ContextKey = TEXT("address_style");
-    Input.SemanticDecision.IntentID = EIntentID::GetWordFact;
-    Input.SemanticDecision.SemanticCore = TEXT("слово «берёза» — растение");
+    Input.ContextKey                       = TEXT("rotation_test");
+    Input.SemanticDecision.IntentID        = EIntentID::GetDefinition;
+    Input.SemanticDecision.EntityTarget    = TEXT("кот");
+    Input.SemanticDecision.SemanticCore    = TEXT("животное");
+    Input.SemanticDecision.ConfidenceLevel = EConfidenceLevel::Verified;
 
-    const FResponseGenerationOutput NeutralOut = Generator.Generate(
-        Input,
-        FResponsePersonalityProfile::MakeV1(
-            EResponseTone::Calm,
-            EResponseLength::Short,
-            EResponseInitiative::Low,
-            EResponseAddressStyle::NeutralYou));
+    Input.SessionResponseCount = 0;
+    const FResponseGenerationOutput Out0 = Generator.Generate(Input, Profile);
 
-    const FResponseGenerationOutput FormalOut = Generator.Generate(
-        Input,
-        FResponsePersonalityProfile::MakeV1(
-            EResponseTone::Calm,
-            EResponseLength::Short,
-            EResponseInitiative::Low,
-            EResponseAddressStyle::FormalYou));
+    Input.SessionResponseCount = 1;
+    const FResponseGenerationOutput Out1 = Generator.Generate(Input, Profile);
 
-    const FString FactLine = TEXT("Ответ: факт — слово «берёза» — растение.");
-    TestTrue(TEXT("Фактологическая строка сохраняется в neutral"), NeutralOut.ResponseText.Contains(FactLine));
-    TestTrue(TEXT("Фактологическая строка сохраняется в formal"), FormalOut.ResponseText.Contains(FactLine));
-    TestTrue(TEXT("Адрес-стиль меняет только форму"), NeutralOut.ResponseText != FormalOut.ResponseText);
-    TestTrue(TEXT("FormatID учитывает address стиль"), NeutralOut.FormatID != FormalOut.FormatID);
+    // Стратегии 0 и 1 — разные (у GetDefinition+Verified+Calm их 5)
+    TestTrue(TEXT("Ротация меняет стратегию"), Out0.StrategyID != Out1.StrategyID);
+    TestTrue(TEXT("Ротация меняет текст"),     Out0.ResponseText != Out1.ResponseText);
+
+    // Но StrategyID при SessionResponseCount=0 стабилен (детерминизм)
+    Input.SessionResponseCount = 0;
+    const FResponseGenerationOutput Out0Again = Generator.Generate(Input, Profile);
+    TestEqual(TEXT("Ротация детерминирована"), Out0.StrategyID, Out0Again.StrategyID);
 
     return true;
 }

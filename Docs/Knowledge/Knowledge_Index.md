@@ -1,4 +1,4 @@
-# Knowledge Index (на 2026-03-19)
+# Knowledge Index (на 2026-03-20)
 
 Единая карта документов для ускорения работы агентов.
 
@@ -9,7 +9,7 @@
 | `README.md` | Контекст проекта, цели, границы и базовая архитектура | Всегда первым | Team | По мере изменений стратегии |
 | `Docs/Roadmap/Agent_Roadmap.md` | Статусы слоёв, приоритеты, DoD | Перед началом и завершением сессии | Team | После каждой существенной сессии |
 | `Docs/Architecture/Critical_Open_Architecture_Gaps.md` | Критические архитектурные пробелы и критерии приёмки | На этапе планирования задачи | Team | При закрытии/открытии пробелов |
-| `Docs/ADR/README.md` | Реестр и статусы архитектурных решений | При любых архитектурных изменениях | Team | При каждом новом ADR |
+| `Docs/ADR/README.md` | Реестр ADR: 0001 (приоритет источников), 0002 (SBA-классификация), 0003 (NLG-конструктор) | При любых архитектурных изменениях | Team | При каждом новом ADR |
 
 ## Ops
 
@@ -24,3 +24,10 @@
 |---|---|---|---|---|
 | `Docs/Contracts/Module_Contracts_v1.md` | Формальные контракты (поля, инварианты, предусловия) для FMorphResult, FIntentResult, FActionRequest/Result, FHypothesis, FHypothesisEvent, FBeliefDecision | Перед изменениями любого из этих типов | Team | При изменении интерфейсов (schema_version++) |
 | `Docs/Contracts/Error_Catalog.md` | Коды ошибок EActionFailReason, EMemoryPolicyDegradationReason, EBeliefAction + матрица recovery + формат DiagnosticNote | При обработке ошибок, написании тестов, доработке генератора ответов | Team | При добавлении новых кодов |
+
+## Architecture
+
+| Документ | Назначение | Когда читать | Владелец | Частота обновления |
+|---|---|---|---|---|
+| `Docs/Architecture/CppLibraries_Recommendations.md` | Рекомендованные внешние инструменты (UDPipe, fastText, SQLite CTE) для извлечения отношений, инференса и семантического сходства | При планировании работ по обогащению семантического графа или расширению NLU | Team | При появлении новых кандидатов или изменении фазового плана |
+| `Docs/Architecture/NLG_Pipeline.md` | Архитектура NLG-конструктора: FResponseSemantics → FSentencePlanner → FMorphRealizer. Как Нейра строит текст из смысла без LLM | При работе над FResponseGenerator или любым компонентом генерации ответов | Team | При переходе между фазами NLG |

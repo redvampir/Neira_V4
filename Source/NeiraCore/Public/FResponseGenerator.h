@@ -14,6 +14,16 @@ enum class EResponseTone : uint8
     Business,
 };
 
+// Уровень уверенности для выбора синтаксической стратегии.
+// Отображается из EBeliefAction в FDialoguePipeline.
+enum class EConfidenceLevel : uint8
+{
+    Verified,   // EBeliefAction::Verified  — знание подтверждено многократно
+    Inferred,   // EBeliefAction::Confirmed — подтверждено хотя бы раз
+    Uncertain,  // EBeliefAction::Created / Rejected — принято, но ненадёжно
+    Unknown,    // EBeliefAction::NoMatch   — не найдено
+};
+
 enum class EResponseLength : uint8
 {
     Short,
@@ -57,11 +67,25 @@ struct NEIRACORE_API FResponsePersonalityProfile
 // Personality сюда НЕ входит.
 struct NEIRACORE_API FResponseSemanticDecision
 {
-    EIntentID IntentID = EIntentID::Unknown;
-    FString   SemanticCore;
+    EIntentID        IntentID        = EIntentID::Unknown;
+    // Субъект запроса — «о чём» спрашивают ("кот", "синтаксис").
+    // Заполняется из FIntentResult::EntityTarget.
+    FString          EntityTarget;
+    // Содержательный ответ — «что известно» о субъекте.
+    FString          SemanticCore;
+    // Уровень уверенности — отображается из EBeliefAction в FDialoguePipeline.
+    EConfidenceLevel ConfidenceLevel = EConfidenceLevel::Unknown;
 
     bool      bHasUncertainty = false;
     FString   UncertaintyReason;
+
+    // Семантически связанные понятия (синонимы, гиперонимы и т.д.),
+    // заполняются вызывающим кодом из FSemanticGraph.
+    // Отображаются только если список не пустой.
+    TArray<FString> RelatedTerms;
+    // Метка раздела: "Синонимы", "Родовые понятия", "Связанные понятия" и т.д.
+    // По умолчанию "Связанные понятия".
+    FString         RelatedTermsLabel;
 };
 
 // Рендеринг ответа: сочетает фактологическое решение и personality.
@@ -69,25 +93,30 @@ struct NEIRACORE_API FResponseGenerationInput
 {
     FString ContextKey;
     FResponseSemanticDecision SemanticDecision;
+    // Счётчик ответов в сессии — используется для ротации стратегий.
+    // Детерминирован: одинаковый счётчик → одинаковая стратегия.
+    int32 SessionResponseCount = 0;
 };
 
 struct NEIRACORE_API FResponseGenerationOutput
 {
     FString FormatID;
     FString ResponseText;
+    // ID выбранной синтаксической стратегии (для отладки и трассировки).
+    FString StrategyID;
 };
 
 struct NEIRACORE_API FResponseGenerator
 {
     // Deterministic policy:
-    // одинаковый (IntentID + ContextKey + Profile) => совместимый формат (стабильный шаблон).
+    // одинаковый (IntentID + ContextKey + SessionResponseCount + Profile) → стабильный FormatID.
+    // ResponseText — живое русское предложение, построенное FSentencePlanner.
     FResponseGenerationOutput Generate(const FResponseGenerationInput& Input,
                                        const FResponsePersonalityProfile& Profile) const;
 
 private:
     static FString BuildFormatID(const FResponseGenerationInput& Input,
                                  const FResponsePersonalityProfile& Profile);
-    static FString BuildIntentBlock(EIntentID IntentID, const FString& SemanticCore);
     static FString ToString(EResponseTone Tone);
     static FString ToString(EResponseLength Length);
     static FString ToString(EResponseInitiative Initiative);
