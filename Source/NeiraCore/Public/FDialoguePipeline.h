@@ -94,6 +94,8 @@ private:
     FHypothesisStore     Store;
     FSemanticGraph       Graph;
     FDialoguePipelineConfig Cfg;
+    // Счётчик ответов — передаётся в FResponseGenerationInput для ротации стратегий.
+    int32                SessionResponseCount = 0;
 
     /**
      * Построить FResponseSemanticDecision из результатов Intent + Belief.

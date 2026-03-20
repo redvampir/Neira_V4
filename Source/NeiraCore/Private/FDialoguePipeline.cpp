@@ -41,12 +41,15 @@ FString FDialoguePipeline::ProcessText(const FString& Input)
     if (Trimmed.IsEmpty())
     {
         FResponseGenerationInput RInput;
-        RInput.ContextKey                     = TEXT("empty_input");
-        RInput.SemanticDecision.IntentID      = EIntentID::Unknown;
-        RInput.SemanticDecision.SemanticCore  = TEXT("пустой запрос");
-        RInput.SemanticDecision.bHasUncertainty  = true;
-        RInput.SemanticDecision.UncertaintyReason = TEXT("запрос пустой или состоит из пробелов");
-        return Generator.Generate(RInput, Cfg.Personality).ResponseText;
+        RInput.ContextKey                          = TEXT("empty_input");
+        RInput.SemanticDecision.IntentID           = EIntentID::Unknown;
+        RInput.SemanticDecision.ConfidenceLevel    = EConfidenceLevel::Unknown;
+        RInput.SemanticDecision.bHasUncertainty    = true;
+        RInput.SemanticDecision.UncertaintyReason  = TEXT("запрос пустой или состоит из пробелов");
+        RInput.SessionResponseCount                = SessionResponseCount;
+        const FString Result = Generator.Generate(RInput, Cfg.Personality).ResponseText;
+        ++SessionResponseCount;
+        return Result;
     }
 
     // Шаг 1: классификация фразы
@@ -67,10 +70,13 @@ FString FDialoguePipeline::ProcessText(const FString& Input)
 
     // Шаг 5: генерация ответа
     FResponseGenerationInput RInput;
-    RInput.ContextKey       = TEXT("dialogue");
-    RInput.SemanticDecision = Semantic;
+    RInput.ContextKey           = TEXT("dialogue");
+    RInput.SemanticDecision     = Semantic;
+    RInput.SessionResponseCount = SessionResponseCount;
 
-    return Generator.Generate(RInput, Cfg.Personality).ResponseText;
+    const FString Result = Generator.Generate(RInput, Cfg.Personality).ResponseText;
+    ++SessionResponseCount;
+    return Result;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,46 +87,54 @@ FResponseSemanticDecision FDialoguePipeline::BuildSemanticDecision(
     const FBeliefDecision& Decision) const
 {
     FResponseSemanticDecision Semantic;
-    Semantic.IntentID = Intent.IntentID;
+    Semantic.IntentID     = Intent.IntentID;
+    Semantic.EntityTarget = Intent.EntityTarget;
 
     switch (Decision.Action)
     {
     case EBeliefAction::Created:
-        Semantic.SemanticCore = FString::Printf(
-            TEXT("факт принят: %s"),
-            Intent.EntityTarget.IsEmpty() ? TEXT("(без объекта)") : *Intent.EntityTarget);
+        Semantic.SemanticCore    = Intent.EntityTarget;
+        Semantic.ConfidenceLevel = EConfidenceLevel::Uncertain;
         break;
 
     case EBeliefAction::Confirmed:
-    case EBeliefAction::Verified:
     {
-        // Получить текст гипотезы из хранилища
         const FHypothesis* H = Store.Find(Decision.HypothesisID);
-        const FString Claim = (H && !H->Claim.IsEmpty()) ? H->Claim : Intent.EntityTarget;
-
+        const FString Claim  = (H && !H->Claim.IsEmpty()) ? H->Claim : Intent.EntityTarget;
         const FString MatchNote = Decision.MatchedVia.IsEmpty()
             ? TEXT("")
             : FString::Printf(TEXT(" (найдено через %s)"), *Decision.MatchedVia);
+        Semantic.SemanticCore    = Claim + MatchNote;
+        Semantic.ConfidenceLevel = EConfidenceLevel::Inferred;
+        break;
+    }
 
-        Semantic.SemanticCore = Claim + MatchNote;
+    case EBeliefAction::Verified:
+    {
+        const FHypothesis* H = Store.Find(Decision.HypothesisID);
+        const FString Claim  = (H && !H->Claim.IsEmpty()) ? H->Claim : Intent.EntityTarget;
+        const FString MatchNote = Decision.MatchedVia.IsEmpty()
+            ? TEXT("")
+            : FString::Printf(TEXT(" (найдено через %s)"), *Decision.MatchedVia);
+        Semantic.SemanticCore    = Claim + MatchNote;
+        Semantic.ConfidenceLevel = EConfidenceLevel::Verified;
         break;
     }
 
     case EBeliefAction::Rejected:
-        Semantic.SemanticCore      = FString::Printf(
-            TEXT("запрос обработан: %s"),
-            Intent.EntityTarget.IsEmpty() ? TEXT("(без объекта)") : *Intent.EntityTarget);
+        Semantic.SemanticCore      = Intent.EntityTarget;
+        Semantic.ConfidenceLevel   = EConfidenceLevel::Uncertain;
         Semantic.bHasUncertainty   = true;
         Semantic.UncertaintyReason = Decision.Reason;
         break;
 
     case EBeliefAction::NoMatch:
     default:
-        Semantic.SemanticCore = FString::Printf(
-            TEXT("не найдено: %s"),
-            Intent.EntityTarget.IsEmpty() ? TEXT("(объект не распознан)") : *Intent.EntityTarget);
+        Semantic.SemanticCore      = Intent.EntityTarget;
+        Semantic.ConfidenceLevel   = EConfidenceLevel::Unknown;
         Semantic.bHasUncertainty   = true;
-        Semantic.UncertaintyReason = Decision.Reason;
+        Semantic.UncertaintyReason = Decision.Reason.IsEmpty()
+            ? TEXT("не найдено") : Decision.Reason;
         break;
     }
 
