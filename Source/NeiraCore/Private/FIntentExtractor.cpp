@@ -1,42 +1,29 @@
 // FIntentExtractor.cpp
-// v0.3 — интеграция с FSyntaxParser, DecisionTrace.
+// v0.4 — интеграция с FSyntaxParser + улучшенные conversational-heuristics.
 //
 // Алгоритм (два пути):
 //
 //   Путь 1: Frame-анализ (приоритет).
 //     FSyntaxParser.Parse() строит FSemanticFrame. Затем ExtractFromFrame()
-//     пробует разрешить Intent по структурным признакам фрейма:
-//       1. Frame.bIsAbilityCheck → AnswerAbility
-//       2. PhraseType == Statement → StoreFact
-//       3. Predicate ∈ {найти} + Object ∈ {значение, определение, смысл} → FindMeaning
-//       4. Predicate ∈ {рассказать, объяснить, сказать} + Object непустой → GetWordFact
-//       5. PhraseType == Question + Object непустой → GetDefinition
-//     Если всё выше не сработало (Object пустой, Predicate неизвестный) → Unknown из фрейма.
+//     пробует разрешить Intent по структурным признакам фрейма и по
+//     phrase-level эвристикам для практических диалоговых сценариев:
+//       1. memory query patterns → RetrieveMemory
+//       2. Frame.bIsAbilityCheck → AnswerAbility
+//       3. PhraseType == Statement → StoreFact
+//       4. command memory-store patterns → StoreFact
+//       5. Predicate ∈ {найти} + Object ∈ {значение, определение, смысл} → FindMeaning
+//       6. Predicate ∈ {рассказать, объяснить, сказать} + topic → GetWordFact
+//       7. definition-question patterns / Question + valid Object → GetDefinition
 //
 //   Путь 2: Fallback — строковые шаблоны v0.1.
 //     Если путь 1 вернул Unknown → ExtractFromPatterns() ищет маркер-подстроку.
 //     Это backward-compatibility: старые тесты продолжают проходить.
-//
-//   DecisionTrace заполняется всегда — описывает какой именно путь/правило сработало.
-//
-// EntityTarget:
-//   - Frame-путь: берётся из Frame.Object (сохраняет оригинальный регистр).
-//   - Pattern-путь: берётся как текст после маркера (поведение v0.1).
-//   - Statement: берётся полная фраза.
-//
-// Ограничения v0.3:
-//   - Координация («найди X и Y») не поддерживается — берётся первый объект.
-//   - Лемматизация предикатов: сравниваются леммы (рассказать/расскажи → одна лемма).
 
 #include "FIntentExtractor.h"
 #include "FMorphAnalyzer.h"
 
 namespace
 {
-    // -----------------------------------------------------------------------
-    // Маркеры для Fallback — строковые шаблоны (v0.1, без изменений)
-    // -----------------------------------------------------------------------
-
     struct FIntentPattern
     {
         FString   Marker;
@@ -45,9 +32,7 @@ namespace
         bool      bExtractAfterMarker;
     };
 
-    // Порядок важен: более специфичные маркеры — выше
     const TArray<FIntentPattern> Patterns = {
-        // GET_DEFINITION
         { TEXT("что такое "),          EIntentID::GetDefinition, 0.9f, true  },
         { TEXT("кто такой "),          EIntentID::GetDefinition, 0.9f, true  },
         { TEXT("кто такая "),          EIntentID::GetDefinition, 0.9f, true  },
@@ -55,34 +40,55 @@ namespace
         { TEXT("что означает "),       EIntentID::GetDefinition, 0.9f, true  },
         { TEXT("что значит "),         EIntentID::GetDefinition, 0.9f, true  },
 
-        // FIND_MEANING
         { TEXT("найди значение "),     EIntentID::FindMeaning,   0.9f, true  },
         { TEXT("найди определение "),  EIntentID::FindMeaning,   0.9f, true  },
 
-        // GET_WORD_FACT
         { TEXT("расскажи про "),       EIntentID::GetWordFact,   0.7f, true  },
         { TEXT("расскажи о "),         EIntentID::GetWordFact,   0.7f, true  },
 
-        // ANSWER_ABILITY
         { TEXT("ты можешь "),          EIntentID::AnswerAbility, 0.8f, false },
         { TEXT("можешь ли ты "),       EIntentID::AnswerAbility, 0.8f, false },
         { TEXT("умеешь ли "),          EIntentID::AnswerAbility, 0.8f, false },
-
-        // STORE_FACT — обрабатывается в ExtractFromFrame по PhraseType
     };
 
-    // Убрать '?' и обрезать пробелы
     FString CleanEntity(const FString& Raw)
     {
         FString Result = Raw.TrimStartAndEnd();
-        if (Result.EndsWith(TEXT("?")))
-            Result = Result.LeftChop(1).TrimEnd();
+
+        while (!Result.IsEmpty())
+        {
+            const char Tail = Result.Last();
+            if (Tail == '?' || Tail == '!' || Tail == '.' || Tail == ',' || Tail == ':')
+            {
+                Result = Result.LeftChop(1).TrimEnd();
+                continue;
+            }
+            break;
+        }
+
         return Result;
     }
 
-    // -----------------------------------------------------------------------
-    // Вспомогательные предикаты для Frame-анализа
-    // -----------------------------------------------------------------------
+    bool TryExtractTailAfterMarker(const FString& Phrase,
+                                   const TArray<FString>& Markers,
+                                   FString& OutTail)
+    {
+        const FString Lower = Phrase.ToLower();
+
+        for (const FString& Marker : Markers)
+        {
+            const int32 MarkerPos = Lower.Find(Marker);
+            if (MarkerPos == INDEX_NONE)
+                continue;
+
+            const int32 TailStart = MarkerPos + Marker.Len();
+            OutTail = CleanEntity(Phrase.Mid(TailStart));
+            if (!OutTail.IsEmpty())
+                return true;
+        }
+
+        return false;
+    }
 
     bool IsFindPredicate(const FString& LemmaLower)
     {
@@ -101,6 +107,16 @@ namespace
             || LemmaLower == TEXT("скажи");
     }
 
+    bool IsMemoryStorePredicate(const FString& LemmaLower)
+    {
+        return LemmaLower == TEXT("запомнить")
+            || LemmaLower == TEXT("запомни")
+            || LemmaLower == TEXT("сохранить")
+            || LemmaLower == TEXT("сохрани")
+            || LemmaLower == TEXT("записать")
+            || LemmaLower == TEXT("запиши");
+    }
+
     bool IsDefinitionObject(const FString& ObjectLower)
     {
         return ObjectLower == TEXT("значение")
@@ -110,9 +126,6 @@ namespace
             || ObjectLower == TEXT("определения");
     }
 
-    // Мета-слова — функциональные слова, не являющиеся целью запроса.
-    // Например: «что означает слово X» → Object="слово", но целевой объект — X.
-    // В таких случаях Frame не может извлечь правильный EntityTarget, и нужен Fallback.
     bool IsMetaWord(const FString& ObjectLower)
     {
         return ObjectLower == TEXT("слово")
@@ -139,14 +152,22 @@ namespace
             || TokenLower == TEXT("выражение");
     }
 
-
-    FString StripLeadingTermMetaToken(const FString& RawTerm)
+    bool IsQuestionPlaceholderToken(const FString& TokenLower)
     {
-        FString Result = CleanEntity(RawTerm);
-        const TArray<FString> Prefixes = {
-            TEXT("слово "), TEXT("слова "), TEXT("термин "), TEXT("термина "),
-            TEXT("понятие "), TEXT("выражение ")
-        };
+        return TokenLower == TEXT("что")
+            || TokenLower == TEXT("кто")
+            || TokenLower == TEXT("как")
+            || TokenLower == TEXT("какой")
+            || TokenLower == TEXT("какая")
+            || TokenLower == TEXT("какие")
+            || TokenLower == TEXT("я")
+            || TokenLower == TEXT("ты")
+            || TokenLower == TEXT("вы");
+    }
+
+    FString StripLeadingPrefixes(const FString& RawValue, const TArray<FString>& Prefixes)
+    {
+        FString Result = CleanEntity(RawValue);
 
         bool bChanged = true;
         while (bChanged)
@@ -165,6 +186,169 @@ namespace
         }
 
         return Result;
+    }
+
+    FString StripLeadingTermMetaToken(const FString& RawTerm)
+    {
+        const TArray<FString> Prefixes = {
+            TEXT("слово "), TEXT("слова "), TEXT("термин "), TEXT("термина "),
+            TEXT("понятие "), TEXT("выражение ")
+        };
+        return StripLeadingPrefixes(RawTerm, Prefixes);
+    }
+
+    FString StripLeadingDefinitionPrompt(const FString& RawValue)
+    {
+        const TArray<FString> Prefixes = {
+            TEXT("что такое "), TEXT("кто такой "), TEXT("кто такая "),
+            TEXT("что означает слово "), TEXT("что означает "),
+            TEXT("что значит "), TEXT("что значит слово ")
+        };
+        return StripLeadingPrefixes(RawValue, Prefixes);
+    }
+
+    bool TryExtractAbilityAction(const FString& Phrase, FString& OutAction)
+    {
+        const TArray<FString> Markers = {
+            TEXT("ты можешь "),
+            TEXT("вы можете "),
+            TEXT("можешь ли ты "),
+            TEXT("можете ли вы "),
+            TEXT("ты умеешь "),
+            TEXT("вы умеете "),
+            TEXT("умеешь ли ты "),
+            TEXT("умеете ли вы ")
+        };
+
+        if (!TryExtractTailAfterMarker(Phrase, Markers, OutAction))
+            return false;
+
+        OutAction = StripLeadingDefinitionPrompt(OutAction);
+        return !OutAction.IsEmpty();
+    }
+
+    bool TryExtractStoreClaim(const FString& Phrase, FString& OutClaim)
+    {
+        const TArray<FString> ExplicitFactMarkers = {
+            TEXT("запомни, что "),
+            TEXT("запомни что "),
+            TEXT("сохрани, что "),
+            TEXT("сохрани что "),
+            TEXT("запиши, что "),
+            TEXT("запиши что ")
+        };
+
+        if (TryExtractTailAfterMarker(Phrase, ExplicitFactMarkers, OutClaim))
+        {
+            if (OutClaim.ToLower().StartsWith(TEXT("что "), false))
+            {
+                OutClaim = CleanEntity(OutClaim.Mid(4));
+            }
+
+            return !OutClaim.IsEmpty();
+        }
+
+        const TArray<FString> GenericStoreMarkers = {
+            TEXT("запомни "),
+            TEXT("сохрани "),
+            TEXT("запиши ")
+        };
+
+        if (!TryExtractTailAfterMarker(Phrase, GenericStoreMarkers, OutClaim))
+            return false;
+
+        const FString ClaimLower = OutClaim.ToLower();
+        if (ClaimLower.Contains(TEXT(" - "))
+            || ClaimLower.Contains(TEXT(" — "))
+            || ClaimLower.Contains(TEXT(" это "))
+            || ClaimLower.Contains(TEXT(" является "))
+            || ClaimLower.Contains(TEXT(" был "))
+            || ClaimLower.Contains(TEXT(" была "))
+            || ClaimLower.Contains(TEXT(" было "))
+            || ClaimLower.Contains(TEXT(" будут "))
+            || ClaimLower.Contains(TEXT(" есть ")))
+        {
+            return true;
+        }
+
+        TArray<FString> Tokens;
+        OutClaim.ParseIntoArrayWS(Tokens);
+        return Tokens.Num() >= 3;
+    }
+
+    bool TryExtractRetrieveMemoryTarget(const FString& Phrase, FString& OutTarget)
+    {
+        const FString Lower = Phrase.ToLower().TrimStartAndEnd();
+
+        if (Lower.StartsWith(TEXT("что я сказал"), false))
+        {
+            OutTarget = TEXT("__last_user_utterance__");
+            return true;
+        }
+
+        if (Lower.StartsWith(TEXT("что ты запомнила"), false) ||
+            Lower.StartsWith(TEXT("что ты запомнил"), false) ||
+            Lower.StartsWith(TEXT("что ты помнишь"), false))
+        {
+            OutTarget = TEXT("__last_stored_fact__");
+            return true;
+        }
+
+        if (Lower.StartsWith(TEXT("вспомни "), false))
+        {
+            OutTarget = CleanEntity(Phrase.Mid(8));
+            return !OutTarget.IsEmpty();
+        }
+
+        if (Lower.StartsWith(TEXT("что ты знаешь про "), false))
+        {
+            OutTarget = CleanEntity(Phrase.Mid(17));
+            return !OutTarget.IsEmpty();
+        }
+
+        return false;
+    }
+
+    bool TryExtractDefinitionTarget(const FString& Phrase, FString& OutTarget)
+    {
+        const TArray<FString> Markers = {
+            TEXT("что такое "),
+            TEXT("кто такой "),
+            TEXT("кто такая "),
+            TEXT("что означает слово "),
+            TEXT("что означает "),
+            TEXT("что значит слово "),
+            TEXT("что значит "),
+            TEXT("как называется ")
+        };
+
+        if (!TryExtractTailAfterMarker(Phrase, Markers, OutTarget))
+            return false;
+
+        OutTarget = StripLeadingTermMetaToken(OutTarget);
+        return !OutTarget.IsEmpty();
+    }
+
+    bool TryExtractTopicAfterTellPredicate(const FString& Phrase, FString& OutTopic)
+    {
+        const TArray<FString> Markers = {
+            TEXT("расскажи мне про "),
+            TEXT("расскажи мне о "),
+            TEXT("расскажи про "),
+            TEXT("расскажи о "),
+            TEXT("объясни мне "),
+            TEXT("объясни "),
+            TEXT("скажи мне про "),
+            TEXT("скажи про "),
+            TEXT("скажи ")
+        };
+
+        if (!TryExtractTailAfterMarker(Phrase, Markers, OutTopic))
+            return false;
+
+        OutTopic = StripLeadingDefinitionPrompt(OutTopic);
+        OutTopic = StripLeadingTermMetaToken(OutTopic);
+        return !OutTopic.IsEmpty();
     }
 
     bool TryExtractTermByExplicitPattern(const FString& Phrase, FString& OutTerm)
@@ -188,9 +372,7 @@ namespace
             const int32 EntityStart = MarkerPos + Marker.Len();
             OutTerm = StripLeadingTermMetaToken(Phrase.Mid(EntityStart));
             if (!OutTerm.IsEmpty() && !IsTermMetaToken(OutTerm.ToLower()))
-            {
                 return true;
-            }
         }
 
         return false;
@@ -232,96 +414,142 @@ namespace
     }
 }
 
-// ---------------------------------------------------------------------------
-// Путь 1: Frame-анализ
-// ---------------------------------------------------------------------------
-
 FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
-                                                  const FString&        OriginalPhrase,
-                                                  EPhraseType           PhraseType) const
+                                                 const FString& OriginalPhrase,
+                                                 EPhraseType PhraseType) const
 {
     FIntentResult Result;
-
-    // 1. Проверка возможности → AnswerAbility
-    if (Frame.bIsAbilityCheck)
-    {
-        Result.IntentID      = EIntentID::AnswerAbility;
-        Result.EntityTarget  = Frame.Object;
-        Result.Confidence    = 0.85f;
-        Result.DecisionTrace = TEXT("Frame.AbilityCheck");
-        Result.FailReason    = EActionFailReason::None;
-        return Result;
-    }
-
-    // 2. Утверждение → StoreFact
-    if (PhraseType == EPhraseType::Statement)
-    {
-        Result.IntentID      = EIntentID::StoreFact;
-        Result.EntityTarget  = OriginalPhrase.TrimStartAndEnd();
-        Result.Confidence    = 0.8f;
-        Result.DecisionTrace = TEXT("PhraseType:Statement");
-        Result.FailReason    = EActionFailReason::None;
-        return Result;
-    }
-
-    const FString PredLower   = Frame.Predicate.ToLower();
+    const FString PredLower = Frame.Predicate.ToLower();
     const FString ObjectLower = Frame.Object.ToLower();
 
-    // 3. Predicate ∈ {найти} + Object ∈ {значение, определение, смысл} → FindMeaning
+    FString MemoryTarget;
+    if (TryExtractRetrieveMemoryTarget(OriginalPhrase, MemoryTarget))
+    {
+        Result.IntentID = EIntentID::RetrieveMemory;
+        Result.EntityTarget = MemoryTarget;
+        Result.Confidence = 0.95f;
+        Result.DecisionTrace = TEXT("PhrasePattern:RetrieveMemory");
+        Result.FailReason = EActionFailReason::None;
+        return Result;
+    }
+
+    if (Frame.bIsAbilityCheck)
+    {
+        FString AbilityAction = Frame.Object;
+        if (AbilityAction.IsEmpty())
+        {
+            TryExtractAbilityAction(OriginalPhrase, AbilityAction);
+        }
+
+        Result.IntentID = EIntentID::AnswerAbility;
+        Result.EntityTarget = AbilityAction;
+        Result.Confidence = AbilityAction.IsEmpty() ? 0.80f : 0.90f;
+        Result.DecisionTrace = AbilityAction.IsEmpty()
+            ? TEXT("Frame.AbilityCheck")
+            : TEXT("Frame.AbilityCheck+ExtractedTail");
+        Result.FailReason = EActionFailReason::None;
+        return Result;
+    }
+
+    if (PhraseType == EPhraseType::Statement)
+    {
+        Result.IntentID = EIntentID::StoreFact;
+        Result.EntityTarget = OriginalPhrase.TrimStartAndEnd();
+        Result.Confidence = 0.8f;
+        Result.DecisionTrace = TEXT("PhraseType:Statement");
+        Result.FailReason = EActionFailReason::None;
+        return Result;
+    }
+
+    if (PhraseType == EPhraseType::Command && IsMemoryStorePredicate(PredLower))
+    {
+        FString Claim;
+        if (TryExtractStoreClaim(OriginalPhrase, Claim))
+        {
+            Result.IntentID = EIntentID::StoreFact;
+            Result.EntityTarget = Claim;
+            Result.Confidence = 0.9f;
+            Result.DecisionTrace = TEXT("Frame.Predicate:MemoryStore");
+            Result.FailReason = EActionFailReason::None;
+            return Result;
+        }
+    }
+
     if (IsFindPredicate(PredLower) && IsDefinitionObject(ObjectLower))
     {
         FString Term;
         if (!TryExtractMeaningTerm(OriginalPhrase, Term))
         {
-            // Frame определил только мета-объект ("значение"/"определение"),
-            // но не целевой термин. Передаём управление fallback-паттернам.
-            Result.IntentID      = EIntentID::Unknown;
-            Result.Confidence    = 0.0f;
+            Result.IntentID = EIntentID::Unknown;
+            Result.Confidence = 0.0f;
             Result.DecisionTrace = TEXT("Frame.PartialParse:MeaningTermMissing");
-            Result.FailReason    = EActionFailReason::PartialParse;
+            Result.FailReason = EActionFailReason::PartialParse;
             Result.DiagnosticNote = TEXT("Найден meta-object для FindMeaning, но целевой термин не извлечён.");
             return Result;
         }
 
-        Result.IntentID      = EIntentID::FindMeaning;
-        Result.EntityTarget  = Term;
-        Result.Confidence    = 0.9f;
+        Result.IntentID = EIntentID::FindMeaning;
+        Result.EntityTarget = Term;
+        Result.Confidence = 0.9f;
         Result.DecisionTrace = TEXT("Frame.Predicate:найти+DefinitionObject+ExtractedTerm");
-        Result.FailReason    = EActionFailReason::None;
+        Result.FailReason = EActionFailReason::None;
         return Result;
     }
 
-    // 4. Predicate ∈ {рассказать, объяснить, сказать} + Object непустой → GetWordFact
-    if (IsTellPredicate(PredLower) && !Frame.Object.IsEmpty())
+    if (IsTellPredicate(PredLower))
     {
-        Result.IntentID      = EIntentID::GetWordFact;
-        Result.EntityTarget  = Frame.Object;
-        Result.Confidence    = 0.75f;
-        Result.DecisionTrace = TEXT("Frame.Predicate:рассказать/объяснить");
-        Result.FailReason    = EActionFailReason::None;
-        return Result;
+        FString Topic = Frame.Object;
+        if (TryExtractTopicAfterTellPredicate(OriginalPhrase, Topic))
+        {
+            Result.IntentID = EIntentID::GetWordFact;
+            Result.EntityTarget = Topic;
+            Result.Confidence = 0.8f;
+            Result.DecisionTrace = TEXT("Frame.Predicate:рассказать/объяснить+ExtractedTopic");
+            Result.FailReason = EActionFailReason::None;
+            return Result;
+        }
+
+        if (!Frame.Object.IsEmpty())
+        {
+            Result.IntentID = EIntentID::GetWordFact;
+            Result.EntityTarget = Frame.Object;
+            Result.Confidence = 0.75f;
+            Result.DecisionTrace = TEXT("Frame.Predicate:рассказать/объяснить");
+            Result.FailReason = EActionFailReason::None;
+            return Result;
+        }
     }
 
-    // 5. Question + Object непустой + Object не мета-слово → GetDefinition
-    //    Мета-слова («слово», «термин» и т.п.) не являются целевым объектом:
-    //    «что означает слово X» — Object="слово", цель — X.
-    //    В таких случаях Frame недостаточен → Fallback на паттерны.
-    if (PhraseType == EPhraseType::Question && !Frame.Object.IsEmpty()
-        && !IsMetaWord(ObjectLower))
+    if (PhraseType == EPhraseType::Question)
     {
-        Result.IntentID      = EIntentID::GetDefinition;
-        Result.EntityTarget  = Frame.Object;
-        Result.Confidence    = 0.85f;
-        Result.DecisionTrace = TEXT("Frame.Question+Object");
-        Result.FailReason    = EActionFailReason::None;
-        return Result;
+        FString DefinitionTarget;
+        if (TryExtractDefinitionTarget(OriginalPhrase, DefinitionTarget))
+        {
+            Result.IntentID = EIntentID::GetDefinition;
+            Result.EntityTarget = DefinitionTarget;
+            Result.Confidence = 0.9f;
+            Result.DecisionTrace = TEXT("Frame.Question+DefinitionTarget");
+            Result.FailReason = EActionFailReason::None;
+            return Result;
+        }
+
+        if (!Frame.Object.IsEmpty()
+            && !IsMetaWord(ObjectLower)
+            && !IsQuestionPlaceholderToken(ObjectLower))
+        {
+            Result.IntentID = EIntentID::GetDefinition;
+            Result.EntityTarget = Frame.Object;
+            Result.Confidence = 0.85f;
+            Result.DecisionTrace = TEXT("Frame.Question+Object");
+            Result.FailReason = EActionFailReason::None;
+            return Result;
+        }
     }
 
-    // Фрейм не дал достаточно информации
-    Result.IntentID      = EIntentID::Unknown;
-    Result.Confidence    = 0.0f;
+    Result.IntentID = EIntentID::Unknown;
+    Result.Confidence = 0.0f;
     Result.DecisionTrace = TEXT("Frame:NoIntent");
-    Result.FailReason    = Frame.IsEmpty()
+    Result.FailReason = Frame.IsEmpty()
         ? EActionFailReason::UnknownIntent
         : EActionFailReason::PartialParse;
     Result.DiagnosticNote = Frame.IsEmpty()
@@ -330,10 +558,6 @@ FIntentResult FIntentExtractor::ExtractFromFrame(const FSemanticFrame& Frame,
     return Result;
 }
 
-// ---------------------------------------------------------------------------
-// Путь 2: Fallback — строковые шаблоны v0.1
-// ---------------------------------------------------------------------------
-
 FIntentResult FIntentExtractor::ExtractFromPatterns(const FString& Phrase) const
 {
     FIntentResult Result;
@@ -341,23 +565,20 @@ FIntentResult FIntentExtractor::ExtractFromPatterns(const FString& Phrase) const
 
     for (const FIntentPattern& P : Patterns)
     {
-        int32 MarkerPos = Lower.Find(P.Marker);
+        const int32 MarkerPos = Lower.Find(P.Marker);
         if (MarkerPos == INDEX_NONE)
             continue;
 
-        Result.IntentID      = P.IntentID;
-        Result.Confidence    = P.Confidence;
+        Result.IntentID = P.IntentID;
+        Result.Confidence = P.Confidence;
         Result.DecisionTrace = FString::Printf(TEXT("Pattern:%s"), *P.Marker.TrimStartAndEnd());
-        Result.FailReason    = EActionFailReason::None;
+        Result.FailReason = EActionFailReason::None;
 
         if (P.bExtractAfterMarker)
         {
-            // Берём оригинальную строку (не Lower) чтобы сохранить регистр сущности
-            int32 EntityStart = MarkerPos + P.Marker.Len();
-            FString Raw       = Phrase.Mid(EntityStart);
-            FString Term      = StripLeadingTermMetaToken(CleanEntity(Raw));
-            // Если после очистки остался мета-токен или пустая строка —
-            // паттерн не дал реального термина, пропускаем.
+            const int32 EntityStart = MarkerPos + P.Marker.Len();
+            FString Raw = Phrase.Mid(EntityStart);
+            FString Term = StripLeadingTermMetaToken(CleanEntity(Raw));
             if (Term.IsEmpty() || IsTermMetaToken(Term.ToLower()))
                 continue;
             Result.EntityTarget = Term;
@@ -366,19 +587,14 @@ FIntentResult FIntentExtractor::ExtractFromPatterns(const FString& Phrase) const
         return Result;
     }
 
-    // Ни один шаблон не сработал
-    Result.IntentID      = EIntentID::Unknown;
-    Result.Confidence    = 0.4f;
-    Result.EntityTarget  = TEXT("");
+    Result.IntentID = EIntentID::Unknown;
+    Result.Confidence = 0.4f;
+    Result.EntityTarget = TEXT("");
     Result.DecisionTrace = TEXT("Fallback:Unknown");
-    Result.FailReason    = EActionFailReason::UnknownIntent;
+    Result.FailReason = EActionFailReason::UnknownIntent;
     Result.DiagnosticNote = TEXT("Fallback-паттерны не распознали намерение.");
     return Result;
 }
-
-// ---------------------------------------------------------------------------
-// Публичный метод
-// ---------------------------------------------------------------------------
 
 FIntentResult FIntentExtractor::Extract(const FString& Phrase, EPhraseType PhraseType) const
 {
@@ -387,33 +603,27 @@ FIntentResult FIntentExtractor::Extract(const FString& Phrase, EPhraseType Phras
     if (Trimmed.IsEmpty())
     {
         FIntentResult Empty;
-        Empty.IntentID      = EIntentID::Unknown;
-        Empty.Confidence    = 0.0f;
+        Empty.IntentID = EIntentID::Unknown;
+        Empty.Confidence = 0.0f;
         Empty.DecisionTrace = TEXT("EmptyInput");
-        Empty.FailReason    = EActionFailReason::EmptyInput;
+        Empty.FailReason = EActionFailReason::EmptyInput;
         Empty.DiagnosticNote = TEXT("Пустой ввод: intent не может быть извлечён.");
         return Empty;
     }
 
-    // Путь 1: Frame-анализ
     const FSemanticFrame Frame = SyntaxParser.Parse(Trimmed, PhraseType);
-    FIntentResult FrameResult  = ExtractFromFrame(Frame, Trimmed, PhraseType);
-
+    FIntentResult FrameResult = ExtractFromFrame(Frame, Trimmed, PhraseType);
     if (FrameResult.IntentID != EIntentID::Unknown)
         return FrameResult;
 
-    // Путь 2: Fallback на строковые шаблоны
     FIntentResult PatternResult = ExtractFromPatterns(Trimmed);
     if (PatternResult.IntentID != EIntentID::Unknown)
         return PatternResult;
 
-    // Не затираем раннюю диагностику частичного синтаксического разбора.
     if (FrameResult.FailReason == EActionFailReason::PartialParse)
     {
         if (!FrameResult.DecisionTrace.IsEmpty())
-        {
             FrameResult.DecisionTrace += TEXT(" -> ");
-        }
         FrameResult.DecisionTrace += PatternResult.DecisionTrace;
         return FrameResult;
     }

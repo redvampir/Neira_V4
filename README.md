@@ -1,5 +1,19 @@
 # Нейра — Саморазвивающийся символьный ИИ-агент
 
+## Быстрая навигация
+
+- [Актуальный снимок](#current-snapshot)
+- [О проекте](#about-project)
+- [План сборки](#build-plan)
+- [Типы памяти](#memory-types)
+- [Build / Run / Test](#build-run-test)
+- [Текущий статус](#current-status)
+- [Дорожная карта](Docs/Roadmap/Agent_Roadmap.md)
+- [Контракты модулей](Docs/Contracts/Module_Contracts_v1.md)
+- [Словари и статус интеграции](Data/Dictionaries/README.md)
+- [Аудит v0.4](Docs/Roadmap/V0_4_Audit_2026-03-19.md)
+
+<a id="about-project"></a>
 ## О проекте
 
 **Нейра** — экспериментальный ИИ-агент, который строится не на статистическом угадывании, а на явных правилах понимания, проверяемых гипотезах и управляемом накоплении знаний.
@@ -14,12 +28,25 @@
 
 ### Документы для координации работ
 
-- Дорожная карта для агентной работы: `Docs/Roadmap/Agent_Roadmap.md`
-- Журнал передачи между сессиями: `Docs/Roadmap/Agent_Handoff_Log.md`
-- Playbook агента: `Docs/Agents/Agent_Playbook.md`
-- Реестр архитектурных решений (ADR): `Docs/ADR/README.md`
-- Индекс знаний проекта: `Docs/Knowledge/Knowledge_Index.md`
-- Критические архитектурные пробелы: `Docs/Architecture/Critical_Open_Architecture_Gaps.md`
+- [Дорожная карта для агентной работы](Docs/Roadmap/Agent_Roadmap.md)
+- [Журнал передачи между сессиями](Docs/Roadmap/Agent_Handoff_Log.md)
+- [Playbook агента](Docs/Agents/Agent_Playbook.md)
+- [Реестр архитектурных решений (ADR)](Docs/ADR/README.md)
+- [Индекс знаний проекта](Docs/Knowledge/Knowledge_Index.md)
+- [Критические архитектурные пробелы](Docs/Architecture/Critical_Open_Architecture_Gaps.md)
+- [Словари и статус интеграции](Data/Dictionaries/README.md)
+- [Отчет по подготовке OpenCorpora](Docs/Knowledge/OpenCorpora_Integration_Success.md)
+
+<a id="current-snapshot"></a>
+## Актуальный снимок на 2026-03-20
+
+Этот README остается входной точкой в проект. Исторические design-разделы ниже сохраняются как reference, а оперативный статус должен совпадать с [Docs/Roadmap/Agent_Roadmap.md](Docs/Roadmap/Agent_Roadmap.md).
+
+- v0.1-v0.4 реализованы в коде и подтверждаются локальным раннером `Source/Tests/neira_tests.exe`.
+- Локальная проверка на 2026-03-20: `146/146 PASS`.
+- `ThresholdRegressionGateTests.cpp` и связанные fixtures подключены, но воспроизводимый `make regression-gate` пока зависит от наличия GNU `make`.
+- Встроенный словарь работает в runtime. OpenCorpora тоже подключен в runtime-path `FMorphAnalyzer`: lookup идет по схеме `dict -> ext_dict -> suffix -> unknown`, а full JSON грузится в `lazy`-режиме по policy.
+- Ближайший этап: Privacy/Security baseline -> SLA C++/Blueprint -> migration playbook для v0.4+.
 
 ---
 
@@ -80,6 +107,7 @@
 
 ---
 
+<a id="build-plan"></a>
 ## План сборки
 
 ### v0.1 — минимальный интерпретатор фраз
@@ -140,7 +168,7 @@
 - ✅ **Ambiguous-trace на токен-уровне**: добавлен `FAmbiguousDecisionTrace` в `FSyntaxParser` с token/index, кандидатами POS, выбранным вариантом, confidence, reason и anchor.
 - ✅ **Memory pressure degradation**: реализован `FMemoryPressurePolicy` с проверяемыми сценариями `Medium/High/Critical` и гарантиями HOT/WARM/COLD + anchor fallback.
 - ✅ **Full fail-reason pipeline**: добавлен end-to-end integration-набор, где частичный синтаксический разбор стабильно даёт `PartialParse` + диагностический trace до action-уровня.
-- ✅ **Threshold regression gate**: действует автоматический regression gate (`make regression-gate`) для изменений confidence-порогов на фиксированном RU/EN-наборе.
+- ✅ **Threshold regression coverage**: `ThresholdRegressionGateTests.cpp` и связанные fixtures добавлены для изменений confidence-порогов на фиксированном RU/EN-наборе; operational launcher `make regression-gate` зависит от наличия GNU `make`.
 
 #### Технический checklist закрытия DoD v0.3 (с целевыми файлами/тестами)
 
@@ -543,6 +571,7 @@ new_weight = old_weight + learning_rate * reward
 
 ---
 
+<a id="memory-types"></a>
 ## Типы памяти
 
 Проекту нужна не одна общая «память», а несколько разных слоёв хранения.
@@ -1101,6 +1130,7 @@ Actions → `BlueprintCallable` методы
 
 ---
 
+<a id="build-run-test"></a>
 ## Build / Run / Test
 
 ### Минимальные требования
@@ -1341,15 +1371,25 @@ Intent
 
 ---
 
+<a id="current-status"></a>
 ## Текущий статус
 
-**Текущий этап:** проектирование структур данных и правил для v0.1–v0.2.
+Этот раздел должен совпадать с [Docs/Roadmap/Agent_Roadmap.md](Docs/Roadmap/Agent_Roadmap.md) и читаться как краткий executive summary.
 
-**Ближайший следующий шаг:**
-- описать `FWordEntry` и `FWordInterpretation` как `.h` файлы;
-- описать `FPhraseParseResult`;
-- зафиксировать правила переходов между статусами в коде;
-- собрать первый набор контрольных фраз для тестов.
+**Снимок на 2026-03-20:**
+
+- v0.4 закрыт на уровне кода: `FBeliefEngine`, `DecisionTrace`, `EventLog`, `Downgrade()` и базовый синтаксический pipeline присутствуют в репозитории.
+- Локальный нативный раннер на 2026-03-20: `Source/Tests/neira_tests.exe` -> `146/146 PASS`.
+- `regression gate` находится в состоянии `In Progress` как операционный workflow: тесты и fixtures подключены, но документированная команда `make regression-gate` зависит от установленного GNU `make`.
+- Встроенный словарь runtime-интегрирован; OpenCorpora тоже встроен в runtime-path `FMorphAnalyzer` через внешний JSON-словарь, общий кэш загрузки, `lazy` default и size-guard policy.
+- Следующий этап: Privacy/Security baseline -> SLA C++/Blueprint -> migration playbook для v0.4+.
+
+**Где смотреть детали:**
+
+- [Текущая дорожная карта](Docs/Roadmap/Agent_Roadmap.md)
+- [Исторический аудит v0.4](Docs/Roadmap/V0_4_Audit_2026-03-19.md)
+- [Статус словарей](Data/Dictionaries/README.md)
+- [Контракты модулей](Docs/Contracts/Module_Contracts_v1.md)
 
 ## Dependencies / Зависимости
 

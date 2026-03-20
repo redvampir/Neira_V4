@@ -1,1 +1,17 @@
+# Тесты
 Source/Tests/neira_tests
+Source/Tests/*.exe
+Source/Tests/*.obj
+Source/ConsoleApp/*.exe
+Source/ConsoleApp/*.obj
+
+# Словари (большие файлы)
+Data/Dictionaries/*.xml
+Data/Dictionaries/*.zip
+*.xml
+*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

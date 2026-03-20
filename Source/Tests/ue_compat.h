@@ -18,6 +18,10 @@
 // --- UE export макросы — в нативной сборке пусты ---
 #define NEIRACORE_API
 
+// --- Макросы конвертации строк ---
+#define TCHAR_TO_ANSI(str) (str)
+#define ANSI_TO_TCHAR(str) (str)
+
 // --- базовые типы ---
 using int32  = int;
 using uint8  = unsigned char;
@@ -146,6 +150,10 @@ public:
     }
     void RemoveAt(int32 Index, int32 Count = 1) { Data.erase(Index, Count); }
     int32 Num() const { return (int32)Data.size(); }
+    
+    // Для совместимости с FFileHelper
+    TArray<char>& GetCharArray() { return *reinterpret_cast<TArray<char>*>(&Data); }
+    const TArray<char>& GetCharArray() const { return *reinterpret_cast<const TArray<char>*>(&Data); }
 
     static FString Printf(const char* Fmt, ...) {
         char buf[1024]; va_list args; va_start(args, Fmt); vsnprintf(buf, sizeof(buf), Fmt, args); va_end(args);
@@ -166,13 +174,6 @@ public:
     // ParseIntoArrayWS — реализация ниже, после полного определения TArray<FString>
     void ParseIntoArrayWS(TArray<FString>& Out) const;
 };
-
-// Hash для FString
-namespace std {
-template<> struct hash<FString> {
-    size_t operator()(const FString& s) const { return std::hash<std::string>{}(s.Data); }
-};
-}
 
 // --------------------------------------------------------------------------
 // TArray<T>
@@ -216,24 +217,24 @@ inline void FString::ParseIntoArrayWS(TArray<FString>& Out) const {
 }
 
 // --------------------------------------------------------------------------
-// Hash для enum-ключей
-// --------------------------------------------------------------------------
-struct EnumHash {
-    template<typename T>
-    size_t operator()(T t) const { return std::hash<int>{}(static_cast<int>(t)); }
-};
-
-// --------------------------------------------------------------------------
 // TMap<K,V>
 // --------------------------------------------------------------------------
 template<typename K, typename V>
-class TMap : public std::unordered_map<K, V, EnumHash> {
+class TMap : public std::unordered_map<K, V> {
 public:
     void Add(const K& Key, const V& Val) { (*this)[Key] = Val; }
     bool Contains(const K& Key) const { return this->count(Key) > 0; }
     V* Find(const K& Key) { auto it = this->find(Key); return it != this->end() ? &it->second : nullptr; }
     const V* Find(const K& Key) const { auto it = this->find(Key); return it != this->end() ? &it->second : nullptr; }
 };
+
+// Специализация hash для FString
+namespace std {
+    template<>
+    struct hash<FString> {
+        size_t operator()(const FString& s) const { return std::hash<std::string>{}(s.Data); }
+    };
+}
 
 // --------------------------------------------------------------------------
 // TSet<T>
@@ -252,6 +253,40 @@ struct FChar {
     static bool IsDigit(char c)      { return c >= '0' && c <= '9'; }
     static bool IsAlpha(char c)      { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
     static bool IsWhitespace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+};
+
+// --------------------------------------------------------------------------
+// FFileHelper — загрузка файлов в строку
+// --------------------------------------------------------------------------
+struct FFileHelper
+{
+    static bool LoadFileToString(FString& Out, const TCHAR* Path)
+    {
+        FILE* File = fopen(Path, "rb");
+        if (!File)
+            return false;
+        
+        // Получаем размер файла
+        fseek(File, 0, SEEK_END);
+        long Size = ftell(File);
+        fseek(File, 0, SEEK_SET);
+        
+        if (Size <= 0)
+        {
+            fclose(File);
+            return false;
+        }
+        
+        // Читаем файл в std::string
+        std::vector<char> Buffer(Size + 1);
+        size_t ReadSize = fread(Buffer.data(), 1, Size, File);
+        Buffer[ReadSize] = 0;
+        
+        Out.Data = std::string(Buffer.data(), ReadSize);
+        
+        fclose(File);
+        return ReadSize > 0;
+    }
 };
 
 

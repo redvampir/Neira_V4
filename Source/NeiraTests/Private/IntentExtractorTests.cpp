@@ -69,6 +69,35 @@ bool FIntentExtractor_IsStatement_StoreFact::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_CommandMemoryFact_StoreFact,
+    "Neira.IntentExtractor.CommandMemoryFact_ReturnsStoreFact",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_CommandMemoryFact_StoreFact::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("запомни что москва столица россии"), EPhraseType::Command);
+    TestEqual(TEXT("Intent → StoreFact"), Result.IntentID, EIntentID::StoreFact);
+    TestEqual(TEXT("EntityTarget → 'москва столица россии'"),
+        Result.EntityTarget, FString(TEXT("москва столица россии")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FIntentExtractor_CommandActionMemoryVerb_RemainsUnknown,
+    "Neira.IntentExtractor.CommandActionMemoryVerb_WithoutClaim_RemainsUnknown",
+    NEIRA_TEST_FLAGS)
+bool FIntentExtractor_CommandActionMemoryVerb_RemainsUnknown::RunTest(const FString& Parameters)
+{
+    FIntentExtractor Extractor;
+    FIntentResult Result = Extractor.Extract(
+        TEXT("запомни задачу"), EPhraseType::Command);
+    TestEqual(TEXT("Action-команда без факта → Unknown"),
+        Result.IntentID, EIntentID::Unknown);
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Намерение: ANSWER_ABILITY
 // ---------------------------------------------------------------------------
@@ -240,9 +269,9 @@ bool FIntentExtractor_Block_WhatMeansSyntax_GetDefinition::RunTest(const FString
     TestEqual(TEXT("Intent → GetDefinition"), Result.IntentID, EIntentID::GetDefinition);
     TestEqual(TEXT("EntityTarget → 'синтаксис'"),
         Result.EntityTarget, FString(TEXT("синтаксис")));
-    TestTrue(TEXT("DecisionTrace содержит fallback-path"),
-        Result.DecisionTrace.Contains(TEXT("Pattern:"))
-        || Result.DecisionTrace.Contains(TEXT("Fallback:")));
+    TestTrue(TEXT("DecisionTrace содержит frame-path или pattern-path"),
+        Result.DecisionTrace.Contains(TEXT("Frame."))
+        || Result.DecisionTrace.Contains(TEXT("Pattern:")));
     return true;
 }
 

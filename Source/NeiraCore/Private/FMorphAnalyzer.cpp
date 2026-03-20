@@ -1,7 +1,8 @@
 // FMorphAnalyzer.cpp
 // v0.4 — расширенный словарь-ядро (1000+ форм) + суффиксные правила.
+// v0.6 — добавлена поддержка внешнего словаря OpenCorpora (JSON).
 //
-// Принцип: сначала словарь (confidence 0.95), потом суффиксы (0.65).
+// Принцип: сначала словарь (confidence 0.95), потом внешний словарь (0.90), потом суффиксы (0.65).
 // v0.2: словарь ~154 слова.
 // v0.3: расширен до ~570 форм тематическими блоками:
 //   — глаголы познания и речи (говорить, думать, понять, слышать, делать, ...)
@@ -17,7 +18,7 @@
 //   — прилагательные: размер, цвет, состояние (маленький, красный, умный, ...)
 //   — числительные 6–10 и порядковые (второй, третий, ...)
 //   — наречия времени/места/степени (сегодня, рядом, почти, снова, ...)
-// В v0.5 словарь будет перенесён в CSV-ресурс для неограниченного роста.
+// v0.6: внешний словарь OpenCorpora (93K уникальных слов, 3.2M форм).
 //
 // Суффиксные правила:
 //   Глаголы: -ать/-ять/-ить/-еть/-уть/-ыть (инфинитивы)
@@ -27,30 +28,553 @@
 //   Прилагательные: -ный/-ной/-ная/-ное/-ные/-кий/-гий/-жий/-щий/-ской
 
 #include "FMorphAnalyzer.h"
+#include <cstdlib>
 
 namespace
 {
-    // -----------------------------------------------------------------------
-    // Тип записи в словаре
-    // -----------------------------------------------------------------------
-    struct FDictEntry
+    enum class EExternalDictionaryLoadMode : uint8
     {
-        const TCHAR* Word;   // нижний регистр, нормализованная форма
-        const TCHAR* Lemma;
-        EPosTag      POS;
+        Off,
+        Lazy,
+        Eager,
     };
 
-    // -----------------------------------------------------------------------
-    // Словарь-ядро (~400 слов)
-    // Структура: служебные слова → глаголы → существительные → прилагательные
-    //            → числительные/кванторы → наречия
-    // Для каждого слова в словаре даётся его нормализованная лемма.
-    // Суффиксные правила покрывают инфинитивы и продуктивные суффиксы —
-    // в словарь попадают формы, которые суффиксы не распознают правильно:
-    //   - спряжения (-ит/-ишь/-ешь/-ю/-ют), прошедшее время (-л/-ла/-ли)
-    //   - нерегулярные существительные
-    //   - все формы прилагательных (суффиксы покрывают только часть)
-    // -----------------------------------------------------------------------
+    struct FExternalDictionaryPolicy
+    {
+        EExternalDictionaryLoadMode LoadMode = EExternalDictionaryLoadMode::Lazy;
+        FString RequestedPath = TEXT("opencorpora_dict.json");
+        int64 MaxFileSizeBytes = 512ll * 1024ll * 1024ll;
+    };
+
+    struct FExternalDictionaryCache
+    {
+        TMap<FString, FDictEntry> Entries;
+        FString LoadedPath;
+        FString ResolvedDefaultPath;
+        bool bLoaded = false;
+        bool bDefaultPathResolved = false;
+        bool bLoadAttempted = false;
+        bool bMissingWarningLogged = false;
+        bool bPolicyLogged = false;
+        bool bSizeGuardWarningLogged = false;
+    };
+
+    FExternalDictionaryCache& GetExternalDictionaryCache()
+    {
+        static FExternalDictionaryCache Cache;
+        return Cache;
+    }
+
+    bool FileExists(const FString& Path)
+    {
+        FILE* File = fopen(TCHAR_TO_ANSI(*Path), "rb");
+        if (!File)
+        {
+            return false;
+        }
+
+        fclose(File);
+        return true;
+    }
+
+    int64 GetFileSizeBytes(const FString& Path)
+    {
+        FILE* File = fopen(TCHAR_TO_ANSI(*Path), "rb");
+        if (!File)
+        {
+            return -1;
+        }
+
+        fseek(File, 0, SEEK_END);
+        const long Size = ftell(File);
+        fclose(File);
+
+        return Size >= 0 ? static_cast<int64>(Size) : -1;
+    }
+
+    bool IsAbsolutePath(const FString& Path)
+    {
+        return (Path.Len() >= 2 && Path[1] == ':')
+            || Path.StartsWith(TEXT("\\\\"))
+            || Path.StartsWith(TEXT("/"));
+    }
+
+    void AddUniqueCandidate(TArray<FString>& OutCandidates, const FString& Candidate)
+    {
+        if (!Candidate.IsEmpty() && !OutCandidates.Contains(Candidate))
+        {
+            OutCandidates.Add(Candidate);
+        }
+    }
+
+    FString GetEnvValue(const char* Name)
+    {
+        const char* Raw = std::getenv(Name);
+        return Raw ? FString(Raw).TrimStartAndEnd() : FString();
+    }
+
+    int64 ParsePositiveInt64(const FString& RawValue, int64 DefaultValue)
+    {
+        if (RawValue.IsEmpty())
+        {
+            return DefaultValue;
+        }
+
+        char* EndPtr = nullptr;
+        const long long Parsed = std::strtoll(*RawValue, &EndPtr, 10);
+        if (EndPtr == *RawValue || Parsed <= 0)
+        {
+            return DefaultValue;
+        }
+
+        return static_cast<int64>(Parsed);
+    }
+
+    EExternalDictionaryLoadMode ParseLoadMode(const FString& RawValue)
+    {
+        const FString Lower = RawValue.ToLower();
+        if (Lower == TEXT("off") || Lower == TEXT("disabled") || Lower == TEXT("0"))
+        {
+            return EExternalDictionaryLoadMode::Off;
+        }
+        if (Lower == TEXT("eager") || Lower == TEXT("startup"))
+        {
+            return EExternalDictionaryLoadMode::Eager;
+        }
+
+        return EExternalDictionaryLoadMode::Lazy;
+    }
+
+    FString LoadModeToString(EExternalDictionaryLoadMode Mode)
+    {
+        switch (Mode)
+        {
+        case EExternalDictionaryLoadMode::Off:
+            return TEXT("off");
+        case EExternalDictionaryLoadMode::Eager:
+            return TEXT("eager");
+        case EExternalDictionaryLoadMode::Lazy:
+        default:
+            return TEXT("lazy");
+        }
+    }
+
+    const FExternalDictionaryPolicy& GetExternalDictionaryPolicy()
+    {
+        static FExternalDictionaryPolicy Policy;
+        static bool bInitialized = false;
+
+        if (!bInitialized)
+        {
+            const FString ModeOverride = GetEnvValue("NEIRA_EXTERNAL_DICT_MODE");
+            const FString PathOverride = GetEnvValue("NEIRA_EXTERNAL_DICT_PATH");
+            const FString MaxMbOverride = GetEnvValue("NEIRA_EXTERNAL_DICT_MAX_MB");
+
+            if (!ModeOverride.IsEmpty())
+            {
+                Policy.LoadMode = ParseLoadMode(ModeOverride);
+            }
+
+            if (!PathOverride.IsEmpty())
+            {
+                Policy.RequestedPath = PathOverride;
+            }
+
+            const int64 MaxMb = ParsePositiveInt64(MaxMbOverride, 512);
+            Policy.MaxFileSizeBytes = MaxMb * 1024ll * 1024ll;
+
+            bInitialized = true;
+        }
+
+        return Policy;
+    }
+
+    FString ResolveDictionaryPath(const FString& RequestedPath)
+    {
+        const FString EffectivePath = RequestedPath.IsEmpty()
+            ? FString(TEXT("opencorpora_dict.json"))
+            : RequestedPath;
+
+        TArray<FString> Candidates;
+        AddUniqueCandidate(Candidates, EffectivePath);
+
+        if (!IsAbsolutePath(EffectivePath))
+        {
+            const TArray<FString> Prefixes = {
+                TEXT("..\\"),
+                TEXT("..\\..\\"),
+                TEXT("..\\..\\..\\")
+            };
+
+            for (const FString& Prefix : Prefixes)
+            {
+                AddUniqueCandidate(Candidates, Prefix + EffectivePath);
+            }
+
+            const bool bHasDirectoryComponent =
+                EffectivePath.Contains(TEXT("\\")) || EffectivePath.Contains(TEXT("/"));
+
+            if (!bHasDirectoryComponent)
+            {
+                const TArray<FString> AlternativeRoots = {
+                    TEXT("Data\\Dictionaries\\"),
+                    TEXT("Source\\Tests\\")
+                };
+
+                for (const FString& Root : AlternativeRoots)
+                {
+                    AddUniqueCandidate(Candidates, Root + EffectivePath);
+                    for (const FString& Prefix : Prefixes)
+                    {
+                        AddUniqueCandidate(Candidates, Prefix + Root + EffectivePath);
+                    }
+                }
+            }
+        }
+
+        for (const FString& Candidate : Candidates)
+        {
+            if (FileExists(Candidate))
+            {
+                return Candidate;
+            }
+        }
+
+        return FString();
+    }
+
+    EPosTag ParseExternalPosTag(const FString& PosStr)
+    {
+        return PosStr == TEXT("Noun") ? EPosTag::Noun :
+               PosStr == TEXT("Verb") ? EPosTag::Verb :
+               PosStr == TEXT("Adjective") ? EPosTag::Adjective :
+               PosStr == TEXT("Adverb") ? EPosTag::Adverb :
+               PosStr == TEXT("Pronoun") ? EPosTag::Pronoun :
+               PosStr == TEXT("Preposition") ? EPosTag::Preposition :
+               PosStr == TEXT("Conjunction") ? EPosTag::Conjunction :
+               PosStr == TEXT("Particle") ? EPosTag::Particle :
+               PosStr == TEXT("Numeral") ? EPosTag::Numeral :
+               EPosTag::Unknown;
+    }
+
+    bool LoadExternalDictionaryIntoCache(FExternalDictionaryCache& Cache, const FString& ResolvedPath)
+    {
+        if (Cache.bLoaded && Cache.LoadedPath == ResolvedPath)
+        {
+            return true;
+        }
+
+        FString JsonContent;
+        if (!FFileHelper::LoadFileToString(JsonContent, *ResolvedPath))
+        {
+            UE_LOG(LogTemp, Error, TEXT("[FMorphAnalyzer] Failed to load external dictionary: %s"), *ResolvedPath);
+            return false;
+        }
+
+        UE_LOG(LogTemp, Log, TEXT("[FMorphAnalyzer] Parsing external dictionary: %s"), *ResolvedPath);
+
+        const int32 EntriesStart = JsonContent.Find(TEXT("\"entries\""));
+        if (EntriesStart == INDEX_NONE)
+        {
+            UE_LOG(LogTemp, Error, TEXT("[FMorphAnalyzer] No 'entries' array found in JSON: %s"), *ResolvedPath);
+            return false;
+        }
+
+        const char* Ptr = TCHAR_TO_ANSI(*JsonContent) + EntriesStart + 9;
+        while (*Ptr && *Ptr != '[')
+        {
+            ++Ptr;
+        }
+
+        if (!*Ptr)
+        {
+            UE_LOG(LogTemp, Error, TEXT("[FMorphAnalyzer] Malformed 'entries' array in JSON: %s"), *ResolvedPath);
+            return false;
+        }
+
+        ++Ptr;
+
+        TMap<FString, FDictEntry> ParsedEntries;
+        int32 ParsedCount = 0;
+        int32 UniqueWordCount = 0;
+
+        while (*Ptr)
+        {
+            while (*Ptr == ' ' || *Ptr == '\n' || *Ptr == '\r' || *Ptr == '\t' || *Ptr == ',')
+            {
+                ++Ptr;
+            }
+
+            if (*Ptr == ']')
+            {
+                break;
+            }
+
+            if (*Ptr != '{')
+            {
+                break;
+            }
+
+            ++Ptr;
+
+            FString Word;
+            FString Lemma;
+            FString PosStr;
+
+            while (*Ptr && *Ptr != '}')
+            {
+                while (*Ptr == ' ' || *Ptr == '\n' || *Ptr == '\r' || *Ptr == '\t' || *Ptr == ',')
+                {
+                    ++Ptr;
+                }
+
+                if (*Ptr == '}')
+                {
+                    break;
+                }
+
+                if (*Ptr != '"')
+                {
+                    ++Ptr;
+                    continue;
+                }
+
+                ++Ptr;
+                std::string KeyBytes;
+                while (*Ptr && *Ptr != '"')
+                {
+                    KeyBytes.push_back(*Ptr);
+                    ++Ptr;
+                }
+                if (*Ptr == '"')
+                {
+                    ++Ptr;
+                }
+
+                while (*Ptr == ':' || *Ptr == ' ' || *Ptr == '\n' || *Ptr == '\r' || *Ptr == '\t')
+                {
+                    ++Ptr;
+                }
+
+                std::string ValueBytes;
+                if (*Ptr == '"')
+                {
+                    ++Ptr;
+                    while (*Ptr && *Ptr != '"')
+                    {
+                        if (*Ptr == '\\' && *(Ptr + 1))
+                        {
+                            ++Ptr;
+                        }
+                        ValueBytes.push_back(*Ptr);
+                        ++Ptr;
+                    }
+                    if (*Ptr == '"')
+                    {
+                        ++Ptr;
+                    }
+                }
+
+                const FString Key(ANSI_TO_TCHAR(KeyBytes.c_str()));
+                const FString Value(ANSI_TO_TCHAR(ValueBytes.c_str()));
+
+                if (Key == TEXT("word"))
+                {
+                    Word = Value;
+                }
+                else if (Key == TEXT("lemma"))
+                {
+                    Lemma = Value;
+                }
+                else if (Key == TEXT("pos"))
+                {
+                    PosStr = Value;
+                }
+            }
+
+            if (*Ptr == '}')
+            {
+                ++Ptr;
+            }
+
+            if (!Word.IsEmpty() && !Lemma.IsEmpty())
+            {
+                const FString LowerWord = Word.ToLower();
+
+                if (!ParsedEntries.Contains(LowerWord))
+                {
+                    ++UniqueWordCount;
+                }
+
+                FDictEntry Entry;
+                Entry.Word = LowerWord;
+                Entry.Lemma = Lemma;
+                Entry.POS = ParseExternalPosTag(PosStr);
+
+                ParsedEntries.Add(LowerWord, Entry);
+                ++ParsedCount;
+
+                if (ParsedCount % 200000 == 0)
+                {
+                    UE_LOG(LogTemp, Log, TEXT("[FMorphAnalyzer] Parsed %d external entries (%d unique forms)..."),
+                        ParsedCount, UniqueWordCount);
+                }
+            }
+        }
+
+        if (ParsedEntries.empty())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[FMorphAnalyzer] External dictionary parsed but no entries were loaded: %s"),
+                *ResolvedPath);
+            return false;
+        }
+
+        Cache.Entries = MoveTemp(ParsedEntries);
+        Cache.LoadedPath = ResolvedPath;
+        Cache.bLoaded = true;
+
+        UE_LOG(LogTemp, Log, TEXT("[FMorphAnalyzer] External dictionary loaded: %d parsed entries, %d unique forms, path=%s"),
+            ParsedCount, UniqueWordCount, *ResolvedPath);
+
+        return true;
+    }
+
+    void LogExternalDictionaryPolicyOnce(FExternalDictionaryCache& Cache,
+                                         const FExternalDictionaryPolicy& Policy)
+    {
+        if (Cache.bPolicyLogged)
+        {
+            return;
+        }
+
+        Cache.bPolicyLogged = true;
+        UE_LOG(LogTemp, Log,
+            TEXT("[FMorphAnalyzer] External dictionary policy: mode=%s, requested_path=%s, max_mb=%lld"),
+            *LoadModeToString(Policy.LoadMode),
+            *Policy.RequestedPath,
+            static_cast<long long>(Policy.MaxFileSizeBytes / (1024ll * 1024ll)));
+    }
+
+    FString ResolveDefaultDictionaryPath(FExternalDictionaryCache& Cache,
+                                         const FExternalDictionaryPolicy& Policy)
+    {
+        if (Cache.bDefaultPathResolved)
+        {
+            return Cache.ResolvedDefaultPath;
+        }
+
+        Cache.bDefaultPathResolved = true;
+
+        const FString ResolvedPath = ResolveDictionaryPath(Policy.RequestedPath);
+        if (ResolvedPath.IsEmpty())
+        {
+            if (!Cache.bMissingWarningLogged)
+            {
+                Cache.bMissingWarningLogged = true;
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[FMorphAnalyzer] External dictionary not found. Checked project-relative paths for %s"),
+                    *Policy.RequestedPath);
+            }
+            return FString();
+        }
+
+        const int64 FileSizeBytes = GetFileSizeBytes(ResolvedPath);
+        if (FileSizeBytes > 0
+            && Policy.MaxFileSizeBytes > 0
+            && FileSizeBytes > Policy.MaxFileSizeBytes)
+        {
+            if (!Cache.bSizeGuardWarningLogged)
+            {
+                Cache.bSizeGuardWarningLogged = true;
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[FMorphAnalyzer] External dictionary skipped by policy: path=%s, size_mb=%lld exceeds max_mb=%lld"),
+                    *ResolvedPath,
+                    static_cast<long long>(FileSizeBytes / (1024ll * 1024ll)),
+                    static_cast<long long>(Policy.MaxFileSizeBytes / (1024ll * 1024ll)));
+            }
+            return FString();
+        }
+
+        Cache.ResolvedDefaultPath = ResolvedPath;
+        return Cache.ResolvedDefaultPath;
+    }
+
+    bool EnsureDefaultExternalDictionaryLoaded(bool bForceLoadForLookup)
+    {
+        FExternalDictionaryCache& Cache = GetExternalDictionaryCache();
+        const FExternalDictionaryPolicy& Policy = GetExternalDictionaryPolicy();
+
+        LogExternalDictionaryPolicyOnce(Cache, Policy);
+
+        if (Cache.bLoaded)
+        {
+            return true;
+        }
+
+        if (Policy.LoadMode == EExternalDictionaryLoadMode::Off)
+        {
+            return false;
+        }
+
+        const FString ResolvedPath = ResolveDefaultDictionaryPath(Cache, Policy);
+        if (ResolvedPath.IsEmpty())
+        {
+            return false;
+        }
+
+        if (Policy.LoadMode == EExternalDictionaryLoadMode::Lazy && !bForceLoadForLookup)
+        {
+            return false;
+        }
+
+        if (Cache.bLoadAttempted)
+        {
+            return false;
+        }
+
+        Cache.bLoadAttempted = true;
+        return LoadExternalDictionaryIntoCache(Cache, ResolvedPath);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Конструктор — инициализирует policy внешнего словаря.
+// По умолчанию full JSON не парсится на старте, а поднимается lazy on miss.
+// ---------------------------------------------------------------------------
+FMorphAnalyzer::FMorphAnalyzer()
+{
+    EnsureDefaultExternalDictionaryLoaded(false);
+}
+
+// ---------------------------------------------------------------------------
+// Загрузка внешнего словаря из JSON
+// ---------------------------------------------------------------------------
+bool FMorphAnalyzer::LoadExternalDictionary(const FString& Path)
+{
+    FExternalDictionaryCache& Cache = GetExternalDictionaryCache();
+    Cache.bLoadAttempted = true;
+
+    const FString RequestedPath = Path.IsEmpty()
+        ? FString(TEXT("opencorpora_dict.json"))
+        : Path;
+
+    const FString ResolvedPath = ResolveDictionaryPath(RequestedPath);
+    if (ResolvedPath.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[FMorphAnalyzer] External dictionary not found: %s"), *RequestedPath);
+        return false;
+    }
+
+    return LoadExternalDictionaryIntoCache(Cache, ResolvedPath);
+}
+
+int32 FMorphAnalyzer::GetExternalDictionarySize() const
+{
+    return GetExternalDictionaryCache().Entries.size();
+}
+
+namespace
+{
     const FDictEntry CoreDictionary[] = {
         // --- местоимения ---
         { TEXT("я"),        TEXT("я"),        EPosTag::Pronoun     },
@@ -118,6 +642,10 @@ namespace
         { TEXT("пжлст"),    TEXT("пожалуйста"),EPosTag::Particle   },
         { TEXT("алло"),     TEXT("алло"),     EPosTag::Particle    },
         { TEXT("эээ"),      TEXT("эээ"),      EPosTag::Particle    },
+        { TEXT("такой"),    TEXT("такой"),    EPosTag::Particle    },
+        { TEXT("такая"),    TEXT("такая"),    EPosTag::Particle    },
+        { TEXT("такое"),    TEXT("такое"),    EPosTag::Particle    },
+        { TEXT("такие"),    TEXT("такие"),    EPosTag::Particle    },
 
         // --- глаголы: быть/связочные ---
         { TEXT("это"),      TEXT("это"),      EPosTag::Particle    },  // частица-связка
@@ -1327,6 +1855,19 @@ namespace
 
     constexpr int32 DictSize = sizeof(CoreDictionary) / sizeof(CoreDictionary[0]);
 
+    // Поиск во встроенном словаре
+    inline const FDictEntry* FindInCoreDictionaryImpl(const FString& LowerWord)
+    {
+        for (int32 i = 0; i < DictSize; ++i)
+        {
+            if (LowerWord == CoreDictionary[i].Word)
+            {
+                return &CoreDictionary[i];
+            }
+        }
+        return nullptr;
+    }
+
     // -----------------------------------------------------------------------
     // Суффиксные правила (порядок важен: более длинные суффиксы — выше)
     // -----------------------------------------------------------------------
@@ -1403,6 +1944,29 @@ namespace
 }
 
 // ---------------------------------------------------------------------------
+// Реализация методов FMorphAnalyzer
+// ---------------------------------------------------------------------------
+bool FMorphAnalyzer::HasExternalDictionary() const
+{
+    return GetExternalDictionaryCache().bLoaded;
+}
+
+const FDictEntry* FMorphAnalyzer::FindInCoreDictionary(const FString& LowerWord) const
+{
+    return FindInCoreDictionaryImpl(LowerWord);
+}
+
+const FDictEntry* FMorphAnalyzer::FindInExternalDictionary(const FString& LowerWord) const
+{
+    const FExternalDictionaryCache& Cache = GetExternalDictionaryCache();
+    if (!Cache.bLoaded)
+        return nullptr;
+    
+    const FDictEntry* Entry = Cache.Entries.Find(LowerWord);
+    return Entry;
+}
+
+// ---------------------------------------------------------------------------
 // Реализация
 // ---------------------------------------------------------------------------
 
@@ -1421,20 +1985,32 @@ FMorphResult FMorphAnalyzer::Analyze(const FString& Word) const
 
     const FString Lower = Cleaned.ToLower();
 
-    // 1. Поиск в словаре
-    for (int32 i = 0; i < DictSize; ++i)
+    // 1. Поиск во встроенном словаре (приоритет highest)
+    const FDictEntry* CoreEntry = FindInCoreDictionary(Lower);
+    if (CoreEntry)
     {
-        if (Lower == CoreDictionary[i].Word)
+        Result.Lemma        = CoreEntry->Lemma;
+        Result.PartOfSpeech = CoreEntry->POS;
+        Result.Confidence   = 0.95f;
+        Result.Source       = TEXT("dict");
+        return Result;
+    }
+
+    // 2. Поиск во внешнем словаре OpenCorpora (приоритет high)
+    if (EnsureDefaultExternalDictionaryLoaded(true))
+    {
+        const FDictEntry* ExtEntry = FindInExternalDictionary(Lower);
+        if (ExtEntry)
         {
-            Result.Lemma        = CoreDictionary[i].Lemma;
-            Result.PartOfSpeech = CoreDictionary[i].POS;
-            Result.Confidence   = 0.95f;
-            Result.Source       = TEXT("dict");
+            Result.Lemma        = ExtEntry->Lemma;
+            Result.PartOfSpeech = ExtEntry->POS;
+            Result.Confidence   = 0.90f;
+            Result.Source       = TEXT("ext_dict");
             return Result;
         }
     }
 
-    // 2. Суффиксные правила
+    // 3. Суффиксные правила (приоритет medium)
     for (int32 i = 0; i < SuffixCount; ++i)
     {
         if (Lower.EndsWith(SuffixRules[i].Suffix))
@@ -1447,7 +2023,7 @@ FMorphResult FMorphAnalyzer::Analyze(const FString& Word) const
         }
     }
 
-    // 3. Числа → Numeral
+    // 4. Числа → Numeral (приоритет medium-low)
     bool bAllDigits = true;
     for (TCHAR C : Lower)
     {
@@ -1462,7 +2038,7 @@ FMorphResult FMorphAnalyzer::Analyze(const FString& Word) const
         return Result;
     }
 
-    // 4. Не определено
+    // 5. Не определено (fallback)
     Result.Lemma        = Lower;
     Result.PartOfSpeech = EPosTag::Unknown;
     Result.Confidence   = 0.1f;

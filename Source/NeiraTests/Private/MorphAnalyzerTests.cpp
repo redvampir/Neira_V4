@@ -105,12 +105,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FMorphAnalyzer_SuffixInfinitive::RunTest(const FString& Parameters)
 {
     FMorphAnalyzer A;
-    // Слово не в словаре, но суффикс -овать → Verb
+    // При наличии внешнего словаря приоритет может перейти с suffix на ext_dict.
     FMorphResult R = A.Analyze(TEXT("программировать"));
     TestEqual  (TEXT("POS → Verb"),       R.PartOfSpeech, EPosTag::Verb);
-    TestEqual  (TEXT("Source → suffix"),  R.Source,       FString(TEXT("suffix")));
-    TestTrue   (TEXT("Confidence < 0.9"), R.Confidence < 0.9f);
-    TestTrue   (TEXT("Confidence > 0.5"), R.Confidence > 0.5f);
+    TestTrue   (TEXT("Source → suffix | ext_dict"),
+        R.Source == TEXT("suffix") || R.Source == TEXT("ext_dict"));
+    if (R.Source == TEXT("ext_dict"))
+    {
+        TestTrue(TEXT("ext_dict confidence >= 0.9"), R.Confidence >= 0.9f);
+    }
+    else
+    {
+        TestTrue(TEXT("suffix confidence < 0.9"), R.Confidence < 0.9f);
+        TestTrue(TEXT("suffix confidence > 0.5"), R.Confidence > 0.5f);
+    }
     return true;
 }
 
@@ -123,7 +131,8 @@ bool FMorphAnalyzer_SuffixNoun_ость::RunTest(const FString& Parameters)
     FMorphAnalyzer A;
     FMorphResult R = A.Analyze(TEXT("скорость"));
     TestEqual(TEXT("POS → Noun"),      R.PartOfSpeech, EPosTag::Noun);
-    TestEqual(TEXT("Source → suffix"), R.Source,       FString(TEXT("suffix")));
+    TestTrue(TEXT("Source → suffix | ext_dict"),
+        R.Source == TEXT("suffix") || R.Source == TEXT("ext_dict"));
     return true;
 }
 
@@ -283,6 +292,31 @@ bool FMorphAnalyzer_DomainPackages_BoundaryTokens::RunTest(const FString& Parame
     FMorphResult MeaningToken = A.Analyze(TEXT("значение"));
     TestEqual(TEXT("boundary: 'значение' → POS Noun"),
         MeaningToken.PartOfSpeech, EPosTag::Noun);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMorphAnalyzer_ExternalDictionary_AutoLoadAndLookup,
+    "Neira.MorphAnalyzer.ExternalDictionary.AutoLoadAndLookup",
+    NEIRA_TEST_FLAGS)
+bool FMorphAnalyzer_ExternalDictionary_AutoLoadAndLookup::RunTest(const FString& Parameters)
+{
+    FMorphAnalyzer A;
+
+    FMorphResult R = A.Analyze(TEXT("абажур"));
+    TestEqual(TEXT("external word: POS → Noun"),
+        R.PartOfSpeech, EPosTag::Noun);
+    TestEqual(TEXT("external word: lemma → абажур"),
+        R.Lemma, FString(TEXT("абажур")));
+    TestEqual(TEXT("external word: source → ext_dict"),
+        R.Source, FString(TEXT("ext_dict")));
+    TestTrue(TEXT("external word: confidence >= 0.9"),
+        R.Confidence >= 0.9f);
+    TestTrue(TEXT("OpenCorpora должен быть загружен после первого внешнего lookup"),
+        A.HasExternalDictionary());
+    TestTrue(TEXT("Размер внешнего словаря должен быть > 0"),
+        A.GetExternalDictionarySize() > 0);
 
     return true;
 }
